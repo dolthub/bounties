@@ -14,11 +14,11 @@ The command line tools reside within `go/payments/cmd/` and the library packages
 
 ### calc_payments
 
-calc_payments is a command line utility that allows executing of attribution models on a local dolt database.
+`calc_payments` is a command line utility that allows executing of attribution models on a local dolt database.
 
 #### Installation
 
-from the `go/payments/cmd/calc_payments` run `go install .`
+From the `go/payments/cmd/calc_payments` run `go install .`
 
 #### Usage
 
@@ -39,7 +39,7 @@ from the `go/payments/cmd/calc_payments` run `go install .`
 
 ### cellwise attribution
 
-the folder `go/pkg/cellwise` contains the code use to do cellwise change attribution.  Cellwise attribution looks at al
+The folder `go/pkg/cellwise` contains the code use to do cellwise change attribution.  Cellwise attribution looks at al
 the changes that have occurred to a dataset during a bounty, and attributes the changes to the first merge commit where
 that value appears.  Based on the way bounties are run, and changes are accepted, each merge commit should correspond to
 an accepted PR.
