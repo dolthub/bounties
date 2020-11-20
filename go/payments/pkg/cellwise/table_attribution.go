@@ -1,3 +1,24 @@
+// Copyright 2020 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// This file incorporates work covered by the following copyright and
+// permission notice:
+//
+// Copyright 2016 Attic Labs, Inc. All rights reserved.
+// Licensed under the Apache License, version 2.0:
+// http://www.apache.org/licenses/LICENSE-2.0
+
 package cellwise
 
 import (
@@ -18,9 +39,9 @@ import (
 type TableAttribution struct {
 	pkHashToTagToCellAtt map[hash.Hash]map[uint64]*cellAtt
 	// CommitToCellCount stores the number of cell changes attributed to a specific commit index
-	CommitToCellCount    map[int16]int
+	CommitToCellCount map[int16]int
 	// AttributedCells is the total number of cell changes that have occurred during the attribution period
-	AttributedCells      int64
+	AttributedCells int64
 }
 
 func newTableCellAttribution() *TableAttribution {
@@ -67,14 +88,18 @@ func (tblAtt *TableAttribution) updateAttribution(ctx context.Context, parentRoo
 	defer differ.Close()
 
 	for {
-		diffs, err := differ.GetDiffs(1, time.Second)
+		diffs, hasMore, err := differ.GetDiffs(1, time.Second)
 
 		if err != nil {
 			return err
 		}
 
-		if differ.IsDone() {
+		if !hasMore {
 			break
+		}
+
+		if len(diffs) == 0 {
+			continue
 		}
 
 		d := diffs[0]
@@ -226,7 +251,7 @@ func (tblAtt *TableAttribution) processDeletion(nbf *types.NomsBinFormat, pkHash
 		})
 
 		if err != nil {
-			return  err
+			return err
 		}
 	}
 

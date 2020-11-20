@@ -2,10 +2,10 @@ package doltutils
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -33,6 +33,8 @@ func GetRows(ctx context.Context, root *doltdb.RootValue, tableName string) (typ
 	return rowData, sch, err
 }
 
+// GetMergeCommitsAfter iterates through the commit graph backwards until it finds `afterHash`, only ever following a
+// a commits first parent. Each merge commit is appended to a slice which is ordered from newest commit to oldest commit
 func GetMergeCommitsAfter(ctx context.Context, db *doltdb.DoltDB, current *doltdb.Commit, afterHash hash.Hash) ([]*doltdb.Commit, error) {
 	var mergeCommits []*doltdb.Commit
 
@@ -78,7 +80,6 @@ func GetMergeCommitsAfter(ctx context.Context, db *doltdb.DoltDB, current *doltd
 
 	return mergeCommits, nil
 }
-
 
 func GetMergeCommitsBetween(ctx context.Context, db *doltdb.DoltDB, start, end hash.Hash) ([]*doltdb.Commit, error) {
 	cs, err := doltdb.NewCommitSpec(end.String())

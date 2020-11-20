@@ -1,3 +1,24 @@
+// Copyright 2020 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// This file incorporates work covered by the following copyright and
+// permission notice:
+//
+// Copyright 2016 Attic Labs, Inc. All rights reserved.
+// Licensed under the Apache License, version 2.0:
+// http://www.apache.org/licenses/LICENSE-2.0
+
 package cellwise
 
 import (
@@ -8,7 +29,7 @@ import (
 
 // Serialize takes a celwise.DatabaseAttribution object and converts it to a proto defined object before serializing it
 // to a byte slice
-func Serialize(att *DatabaseAttribution) ([]byte, error){
+func Serialize(att *DatabaseAttribution) ([]byte, error) {
 	var commitsProto [][]byte
 	for _, commitHash := range att.Commits {
 		h := commitHash
@@ -23,7 +44,7 @@ func Serialize(att *DatabaseAttribution) ([]byte, error){
 
 	for name, tblAtt := range att.NameToTableAttribution {
 		commitToCountProto := convertCommitToCountProto(tblAtt.CommitToCellCount)
-		attProto.NameToTableAtt[name] =  &payments.TableAttribution{
+		attProto.NameToTableAtt[name] = &payments.TableAttribution{
 			RowAttribution:  serializeRowAtt(tblAtt.pkHashToTagToCellAtt),
 			CommitToCount:   commitToCountProto,
 			AttributedCells: uint64(tblAtt.AttributedCells),
@@ -48,7 +69,7 @@ func serializeRowAtt(pkHashToTagToCellAtt map[hash.Hash]map[uint64]*cellAtt) *pa
 		for tag, cellAtt := range tagToCellAtt {
 			tagToCellAttProto.Tags = append(tagToCellAttProto.Tags, tag)
 			tagToCellAttProto.CellAtt = append(tagToCellAttProto.CellAtt, &payments.CellAttribution{
-				CommitIdx: int32(cellAtt.CurrentOwner),
+				CommitIdx:  int32(cellAtt.CurrentOwner),
 				PastValues: serializePastValues(cellAtt.PastValues),
 			})
 		}
@@ -78,7 +99,7 @@ func serializePastValues(pastValues map[hash.Hash]int16) *payments.HashToIndex {
 
 // Deserialize takes a byte slice and attempts to deserialize based on the proto definition and then converts the proto
 // object to a cellwise.DatabaseAttribution object
-func Deserialize(bytes []byte) (*DatabaseAttribution, error){
+func Deserialize(bytes []byte) (*DatabaseAttribution, error) {
 	var dbAttProto payments.CellwiseDBAttribution
 	err := proto.Unmarshal(bytes, &dbAttProto)
 

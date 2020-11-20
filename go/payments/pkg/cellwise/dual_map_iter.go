@@ -1,3 +1,24 @@
+// Copyright 2020 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// This file incorporates work covered by the following copyright and
+// permission notice:
+//
+// Copyright 2016 Attic Labs, Inc. All rights reserved.
+// Licensed under the Apache License, version 2.0:
+// http://www.apache.org/licenses/LICENSE-2.0
+
 package cellwise
 
 import (
@@ -10,32 +31,32 @@ import (
 )
 
 type kv struct {
-	key types.Value
+	key   types.Value
 	value types.Value
 }
 
-func kvDiff(from, to *kv) (*diff.Difference, error){
+func kvDiff(from, to *kv) (*diff.Difference, error) {
 	if to == nil {
 		return &diff.Difference{
 			ChangeType: types.DiffChangeRemoved,
-			OldValue:    from.value,
-			KeyValue:    from.key,
+			OldValue:   from.value,
+			KeyValue:   from.key,
 		}, nil
 	}
 
 	if from == nil {
 		return &diff.Difference{
 			ChangeType: types.DiffChangeAdded,
-			NewValue: to.value,
-			KeyValue: to.key,
+			NewValue:   to.value,
+			KeyValue:   to.key,
 		}, nil
 	}
 
 	return &diff.Difference{
 		ChangeType: types.DiffChangeModified,
-		OldValue:    from.value,
-		NewValue:    to.value,
-		KeyValue:    from.key,
+		OldValue:   from.value,
+		NewValue:   to.value,
+		KeyValue:   from.key,
 	}, nil
 }
 
@@ -44,13 +65,10 @@ type Differ interface {
 	// Start initializes the iterator to iterate over 2 maps
 	Start(ctx context.Context, from, to types.Map)
 	// Close cleans up any resources
-	Close()
-	// IsDone will return true when all diffs have been read
-	IsDone() bool
-	// GetDiffs gets up to the specified number of diffs.  A timeout can be specified and if the requested number of diffs
+	Close() error
 	// are not available it will return what is available.  A timeout of 0 returns what is immediately available without waiting.
 	// a timeout of -1 will wait indefinitely until the number of diffs are available, or it can return all remaining diffs
-	GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, error)
+	GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error)
 }
 
 // dualMapIter is a Differ implementation which will returns every row.  We use this to iterate over every row in the
@@ -82,18 +100,15 @@ func (itr *dualMapIter) Start(ctx context.Context, from, to types.Map) {
 	itr.mItrs = [2]types.MapIterator{fromItr, toItr}
 }
 
-// IsDone will return true when all diffs have been read
-func (itr *dualMapIter) IsDone() bool {
-	return itr.isDone
-}
-
 // Close cleans up any resources
-func (itr *dualMapIter) Close() {}
+func (itr *dualMapIter) Close() error {
+	return nil
+}
 
 // GetDiffs gets up to the specified number of diffs.  A timeout can be specified and if the requested number of diffs
 // are not available it will return what is available.  A timeout of 0 returns what is immediately available without waiting.
 // a timeout of -1 will wait indefinitely until the number of diffs are available, or it can return all remaining diffs
-func (itr *dualMapIter) GetDiffs(numDiffs int, _ time.Duration) ([]*diff.Difference, error) {
+func (itr *dualMapIter) GetDiffs(numDiffs int, _ time.Duration) ([]*diff.Difference, bool, error) {
 	if numDiffs == 0 {
 		numDiffs = math.MaxInt32
 	}
@@ -103,7 +118,7 @@ func (itr *dualMapIter) GetDiffs(numDiffs int, _ time.Duration) ([]*diff.Differe
 		diff, err := itr.getDiff()
 
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
 		if diff == nil {
@@ -113,7 +128,7 @@ func (itr *dualMapIter) GetDiffs(numDiffs int, _ time.Duration) ([]*diff.Differe
 		results = append(results, diff)
 	}
 
-	return results, nil
+	return results, len(results) > 0, nil
 }
 
 func (itr *dualMapIter) getDiff() (*diff.Difference, error) {
@@ -142,7 +157,7 @@ func (itr *dualMapIter) getDiff() (*diff.Difference, error) {
 		toKV := itr.current[1]
 		itr.current[1] = nil
 		return kvDiff(nil, toKV)
-	} else if itr.current[1] == nil{
+	} else if itr.current[1] == nil {
 		// one kvp is nil so keep returning the other until this map is exhausted
 		fromKV := itr.current[0]
 		itr.current[0] = nil
@@ -172,4 +187,3 @@ func (itr *dualMapIter) getDiff() (*diff.Difference, error) {
 		}
 	}
 }
-

@@ -1,3 +1,24 @@
+// Copyright 2020 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// This file incorporates work covered by the following copyright and
+// permission notice:
+//
+// Copyright 2016 Attic Labs, Inc. All rights reserved.
+// Licensed under the Apache License, version 2.0:
+// http://www.apache.org/licenses/LICENSE-2.0
+
 package main
 
 import (
@@ -16,7 +37,7 @@ import (
 )
 
 func errExit(message string) {
-	fmt.Fprintln(os.Stderr, message + "\n")
+	fmt.Fprintln(os.Stderr, message+"\n")
 	os.Exit(1)
 }
 
@@ -123,7 +144,7 @@ func calcCellwisePayments(ctx context.Context, dEnv *env.DoltEnv, start, end has
 
 		fmt.Printf("Attribution as of %s:\n", currHash.String())
 		nameToCommitToCounts := att.GetCounts()
-		for commit, count:= range nameToCommitToCounts {
+		for commit, count := range nameToCommitToCounts {
 			fmt.Printf("\t%s: %d\n", commit.String(), count)
 		}
 	}
@@ -141,7 +162,7 @@ func readIncremental(start hash.Hash, mergeCommits []*doltdb.Commit, incremental
 				return 0, nil, err
 			}
 
-			incrementalFile := filepath.Join(incrementalDir, start.String() + "_" + h.String())
+			incrementalFile := filepath.Join(incrementalDir, start.String()+"_"+h.String())
 			stat, err := os.Stat(incrementalFile)
 
 			if err == nil {
@@ -178,8 +199,8 @@ func updateIncrementalDir(att *cellwise.DatabaseAttribution, incrementalDir stri
 		}
 
 		start := att.AttribStartPoint.String()
-		current := att.Commits[len(att.Commits) - 1].String()
-		incrementalFile := filepath.Join(incrementalDir, start + "_" + current)
+		current := att.Commits[len(att.Commits)-1].String()
+		incrementalFile := filepath.Join(incrementalDir, start+"_"+current)
 		return ioutil.WriteFile(incrementalFile, data, os.ModePerm)
 	}
 
@@ -207,4 +228,3 @@ func validateDirectory(dir string) (string, error) {
 
 	return absPath, err
 }
-
