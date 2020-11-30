@@ -1,0 +1,10 @@
+module github.com/dolthub/bounties/go
+
+go 1.15
+
+require (
+	github.com/dolthub/dolt/go v0.0.0-20201118230202-3731058750d9
+	github.com/golang/protobuf v1.4.2
+	github.com/stretchr/testify v1.6.1
+	google.golang.org/protobuf v1.25.0
+)
