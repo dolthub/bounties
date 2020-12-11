@@ -46,6 +46,6 @@ an accepted PR.
 
 In order to be able to do this without re-processing the entire history each time a new change is merged, we walk the 
 commit graph from the starting point of the bounty until the latest commit, and at every merge commit we iterate over
-all the changes.  Any value for a cell that is new we will attribute to the curreent commit.  If the new value was seen
+all the changes.  Any value for a cell that is new we will attribute to the current commit.  If the new value was seen
 before, during the bounty we attribute the change back to the original commit where it was first seen.  This allows us
 to save state between attribution runs and only process new commits.

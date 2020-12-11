@@ -18,15 +18,16 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	
 	"github.com/dolthub/bounties/go/payments/pkg/cellwise"
 	"github.com/dolthub/bounties/go/payments/pkg/doltutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
-	"io/ioutil"
-	"os"
-	"path/filepath"
 )
 
 func errExit(message string) {
@@ -96,6 +97,8 @@ func main() {
 	switch *method {
 	case "cellwise":
 		err = calcCellwisePayments(ctx, dEnv, start, end, absIncremental)
+	default:
+		errExit(fmt.Sprintf("Unknown --method '%s'", *method))
 	}
 
 	if err != nil {
