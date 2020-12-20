@@ -15,7 +15,13 @@ func GetRows(ctx context.Context, root *doltdb.RootValue, tableName string) (typ
 	if err != nil {
 		return types.EmptyMap, nil, err
 	} else if !ok {
-		return types.EmptyMap, nil, nil
+		m, err := types.NewMap(ctx, root.VRW())
+
+		if err != nil {
+			return types.EmptyMap, nil, err
+		}
+
+		return m, nil, nil
 	}
 
 	rowData, err := tbl.GetRowData(ctx)
