@@ -21,7 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	
+
 	"github.com/dolthub/bounties/go/payments/pkg/cellwise"
 	"github.com/dolthub/bounties/go/payments/pkg/doltutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -59,7 +59,7 @@ func main() {
 
 	var end hash.Hash
 	if len(*endHash) == 0 {
-		errExit("Missing required parameter '-start'.")
+		errExit("Missing required parameter '-end'.")
 	} else if end, ok = hash.MaybeParse(*endHash); !ok {
 		errExit(fmt.Sprintf("Invalid hash: '%s'", *endHash))
 	}
