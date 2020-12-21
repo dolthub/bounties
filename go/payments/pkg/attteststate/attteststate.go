@@ -274,7 +274,13 @@ func createTable(ctx context.Context, ddb *doltdb.DoltDB, state tableState) (*do
 		return nil, err
 	}
 
-	tbl, err := doltdb.NewTable(ctx, vrw, schVal, state.rowData, nil)
+	m, err := types.NewMap(ctx, ddb.ValueReadWriter())
+
+	if err != nil {
+		return nil, err
+	}
+
+	tbl, err := doltdb.NewTable(ctx, vrw, schVal, state.rowData, m)
 
 	if err != nil {
 		return nil, err
