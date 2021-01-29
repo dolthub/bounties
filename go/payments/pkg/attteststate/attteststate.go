@@ -54,28 +54,22 @@ func init() {
 		schema.NewColumn("col3", col3Tag, types.StringKind, false),
 	}
 
-	attColColl, err := schema.NewColCollection(cols...)
+	attColColl := schema.NewColCollection(cols...)
 
-	if err != nil {
-		panic(err)
-	}
+	columns := make([]schema.Column, len(cols))
+	copy(columns, cols)
 
-	cols[3] = schema.NewColumn("col4", col4Tag, types.StringKind, false)
+	columns[3] = schema.NewColumn("col4", col4Tag, types.StringKind, false)
 
-	updatedColColl, err := schema.NewColCollection(cols...)
+	updatedColColl := schema.NewColCollection(columns...)
 
-	if err != nil {
-		panic(err)
-	}
-
+	var err error
 	AttSch, err = schema.SchemaFromCols(attColColl)
-
 	if err != nil {
 		panic(err)
 	}
 
 	UpdatedSch, err = schema.SchemaFromCols(updatedColColl)
-
 	if err != nil {
 		panic(err)
 	}
