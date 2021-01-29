@@ -54,20 +54,13 @@ func init() {
 		schema.NewColumn("col3", col3Tag, types.StringKind, false),
 	}
 
-	attColColl, err := schema.NewColCollection(cols...)
-
-	if err != nil {
-		panic(err)
-	}
+	attColColl := schema.NewColCollection(cols...)
 
 	cols[3] = schema.NewColumn("col4", col4Tag, types.StringKind, false)
 
-	updatedColColl, err := schema.NewColCollection(cols...)
+	updatedColColl := schema.NewColCollection(cols...)
 
-	if err != nil {
-		panic(err)
-	}
-
+	var err error
 	AttSch, err = schema.SchemaFromCols(attColColl)
 
 	if err != nil {
