@@ -274,7 +274,7 @@ func createTable(ctx context.Context, ddb *doltdb.DoltDB, state tableState) (*do
 		return nil, err
 	}
 
-	tbl, err := doltdb.NewTable(ctx, vrw, schVal, state.rowData, m)
+	tbl, err := doltdb.NewTable(ctx, vrw, schVal, state.rowData, m, nil)
 
 	if err != nil {
 		return nil, err
