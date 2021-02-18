@@ -62,11 +62,7 @@ func (tblAtt *TableAttribution) updateAttribution(ctx context.Context, parentRoo
 	}
 
 	nbf := parentRoot.VRW().Format()
-	eqSchemas, err := schema.SchemasAreEqual(parentSch, sch)
-
-	if err != nil {
-		return err
-	}
+	eqSchemas := schema.SchemasAreEqual(parentSch, sch)
 
 	// iterate over the diffs
 	var differ Differ
