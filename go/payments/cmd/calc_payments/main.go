@@ -21,6 +21,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	
+	"github.com/pkg/profile"
 
 	"github.com/dolthub/bounties/go/payments/pkg/cellwise"
 	"github.com/dolthub/bounties/go/payments/pkg/doltutils"
@@ -29,6 +31,35 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 )
+
+type options struct {
+	repoDir           string
+	startHash         hash.Hash
+	endHash           hash.Hash
+	incremantalDir    string
+	updateIncremental bool
+	profile           string
+	profileHash       hash.Hash
+}
+
+func startProfiling(profileType string) func() {
+	switch profileType {
+	case "cpu":
+		fmt.Println("cpu profiling enabled.")
+		return profile.Start(profile.CPUProfile).Stop
+	case "mem":
+		fmt.Println("mem profiling enabled.")
+		return profile.Start(profile.MemProfile).Stop
+	case "blocking":
+		fmt.Println("block profiling enabled")
+		return profile.Start(profile.BlockProfile).Stop
+	case "trace":
+		fmt.Println("trace profiling enabled")
+		return profile.Start(profile.TraceProfile).Stop
+	default:
+		panic("Unexpected prof flag: " + profileType)
+	}	
+}
 
 func errExit(message string) {
 	fmt.Fprintln(os.Stderr, message+"\n")
@@ -43,6 +74,9 @@ func main() {
 	startHash := flag.String("start", "", "Commit hash representing the start of a bounty before any contributions are made.")
 	endHash := flag.String("end", "", "Last commit hash included in the payment calculation.")
 	incremental := flag.String("incremental", "", "When a directory is provided, incremental attribution is enabled and state files are read from and written to the provided directory.")
+	dontUpdateIncremental := flag.Bool("dont-update-incremental", false, "Only read from the incremental dir, do not write back to it.")
+	profileType := flag.String("profile", "", "options are (cpu,mem,blocking,trace)")
+	profileHashStr := flag.String("profile-hash", "", "commit hash to limit profiling to")
 	flag.Parse()
 
 	if len(*method) == 0 {
@@ -64,6 +98,14 @@ func main() {
 		errExit(fmt.Sprintf("Invalid hash: '%s'", *endHash))
 	}
 
+	var profileHash hash.Hash
+	if len(*profileHashStr) != 0 {
+		profileHash, ok = hash.MaybeParse(*endHash);
+		if !ok {
+			errExit(fmt.Sprintf("Invalid hash: '%s'", *endHash))
+		}
+	}
+
 	absPath, err := validateDirectory(*repoDir)
 
 	if err != nil {
@@ -82,6 +124,16 @@ func main() {
 		errExit(err.Error())
 	}
 
+	opts := options{
+		repoDir:           absPath,
+		startHash:         start,
+		endHash:           end,
+		incremantalDir:    absIncremental,
+		updateIncremental: !*dontUpdateIncremental,
+		profile:           *profileType,
+		profileHash:       profileHash,
+	}
+
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, "")
 
 	if dEnv.CfgLoadErr != nil {
@@ -96,7 +148,7 @@ func main() {
 
 	switch *method {
 	case "cellwise":
-		err = calcCellwisePayments(ctx, dEnv, start, end, absIncremental)
+		err = calcCellwisePayments(ctx, dEnv, opts)
 	default:
 		errExit(fmt.Sprintf("Unknown --method '%s'", *method))
 	}
@@ -106,14 +158,19 @@ func main() {
 	}
 }
 
-func calcCellwisePayments(ctx context.Context, dEnv *env.DoltEnv, start, end hash.Hash, incrementalDir string) error {
-	mergeCommits, err := doltutils.GetMergeCommitsBetween(ctx, dEnv.DoltDB, start, end)
+func calcCellwisePayments(ctx context.Context, dEnv *env.DoltEnv, opts options) error {
+	mergeCommits, err := doltutils.GetMergeCommitsBetween(ctx, dEnv.DoltDB, opts.startHash, opts.endHash)
 
 	if err != nil {
 		return err
 	}
 
-	i, att, err := readIncremental(start, mergeCommits, incrementalDir)
+	if opts.profile != "" && opts.profileHash.IsEmpty() {
+		stopProfFunc := startProfiling(opts.profile)
+		defer stopProfFunc()
+	}
+
+	i, att, err := readIncremental(opts.startHash, mergeCommits, opts.incremantalDir)
 
 	if err != nil {
 		return err
@@ -126,23 +183,39 @@ func calcCellwisePayments(ctx context.Context, dEnv *env.DoltEnv, start, end has
 			return err
 		}
 
-		err = att.Update(ctx, dEnv.DoltDB, start, currHash)
+		err2 := calcCellwisePaymentsForCommit(ctx, dEnv, opts, att, currHash)
+		if err2 != nil {
+			return err2
+		}
+	}
+
+	return nil
+}
+
+func calcCellwisePaymentsForCommit(ctx context.Context, dEnv *env.DoltEnv, opts options, att *cellwise.DatabaseAttribution, currHash hash.Hash) error {
+	if opts.profile != "" && opts.profileHash.Equal(currHash) {
+		stopProfFunc := startProfiling(opts.profile)
+		defer stopProfFunc()
+	}
+
+	err := att.Update(ctx, dEnv.DoltDB, opts.startHash, currHash)
+
+	if err != nil {
+		return err
+	}
+
+	if opts.updateIncremental {
+		err = updateIncrementalDir(att, opts.incremantalDir)
 
 		if err != nil {
 			return err
 		}
+	}
 
-		err = updateIncrementalDir(att, incrementalDir)
-
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("Attribution as of %s:\n", currHash.String())
-		nameToCommitToCounts := att.GetCounts()
-		for commit, count := range nameToCommitToCounts {
-			fmt.Printf("\t%s: %d\n", commit.String(), count)
-		}
+	fmt.Printf("Attribution as of %s:\n", currHash.String())
+	nameToCommitToCounts := att.GetCounts()
+	for commit, count := range nameToCommitToCounts {
+		fmt.Printf("\t%s: %d\n", commit.String(), count)
 	}
 
 	return nil
