@@ -32,7 +32,7 @@ func Serialize(att *DatabaseAttribution) ([]byte, error) {
 	attProto := &payments.CellwiseDBAttribution{
 		StartHash:      att.AttribStartPoint[:],
 		Commits:        commitsProto,
-		NameToTableAtt: make(map[string]*payments.TableAttribution),
+		NameToTableAtt: make(map[string]*payments.TableAttribution, len(att.NameToTableAttribution)),
 	}
 
 	for name, tblAtt := range att.NameToTableAttribution {
@@ -48,7 +48,7 @@ func Serialize(att *DatabaseAttribution) ([]byte, error) {
 }
 
 func convertCommitToCountProto(commitToCellCount map[int16]int) map[int32]uint32 {
-	commitToCountProto := make(map[int32]uint32)
+	commitToCountProto := make(map[int32]uint32, len(commitToCellCount))
 	for commitIdx, count := range commitToCellCount {
 		commitToCountProto[int32(commitIdx)] = uint32(count)
 	}
@@ -89,6 +89,19 @@ func serializePastValues(pastValues map[hash.Hash]int16) *payments.HashToIndex {
 
 	return nil
 }
+// Deserialize takes a byte slice and attempts to deserialize based on the proto definition and then converts the proto
+// object to a cellwise.DatabaseAttribution object
+func DeserializeWithoutCellData(bytes []byte) (*DatabaseAttribution, error) {
+	var dbAttProto payments.CellwiseDBAttribution
+	err := proto.Unmarshal(bytes, &dbAttProto)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return dbAttributionNoCells(&dbAttProto)
+}
+
 
 // Deserialize takes a byte slice and attempts to deserialize based on the proto definition and then converts the proto
 // object to a cellwise.DatabaseAttribution object
@@ -100,6 +113,22 @@ func Deserialize(bytes []byte) (*DatabaseAttribution, error) {
 		return nil, err
 	}
 
+	dbAtt, err := dbAttributionNoCells(&dbAttProto)
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = addCellAttData(&dbAttProto, dbAtt)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return dbAtt, nil
+}
+
+func dbAttributionNoCells(dbAttProto *payments.CellwiseDBAttribution) (*DatabaseAttribution, error) {
 	var commits []hash.Hash
 	for _, bytes := range dbAttProto.Commits {
 		commits = append(commits, hash.New(bytes))
@@ -113,7 +142,6 @@ func Deserialize(bytes []byte) (*DatabaseAttribution, error) {
 
 	for name, tblAttProto := range dbAttProto.NameToTableAtt {
 		dbAtt.NameToTableAttribution[name] = &TableAttribution{
-			pkHashToTagToCellAtt: deserializeRowAtt(tblAttProto.RowAttribution),
 			CommitToCellCount:    convertProtoToCommitToCount(tblAttProto.CommitToCount),
 			AttributedCells:      int64(tblAttProto.AttributedCells),
 		}
@@ -122,8 +150,16 @@ func Deserialize(bytes []byte) (*DatabaseAttribution, error) {
 	return dbAtt, nil
 }
 
+func addCellAttData(dbAttProto *payments.CellwiseDBAttribution, dbAtt *DatabaseAttribution) error {
+	for name, tblAttProto := range dbAttProto.NameToTableAtt {
+		dbAtt.NameToTableAttribution[name].pkHashToTagToCellAtt = deserializeRowAtt(tblAttProto.RowAttribution)
+	}
+
+	return nil
+}
+
 func convertProtoToCommitToCount(commitToCountProto map[int32]uint32) map[int16]int {
-	commitToCellCount := make(map[int16]int)
+	commitToCellCount := make(map[int16]int, len(commitToCountProto))
 	for commitIdx, count := range commitToCountProto {
 		commitToCellCount[int16(commitIdx)] = int(count)
 	}
@@ -131,12 +167,12 @@ func convertProtoToCommitToCount(commitToCountProto map[int32]uint32) map[int16]
 }
 
 func deserializeRowAtt(rowAttProto *payments.PKHashToTagToCellAttribution) map[hash.Hash]map[uint64]*cellAtt {
-	pkHashToTagToCellAtt := make(map[hash.Hash]map[uint64]*cellAtt)
+	pkHashToTagToCellAtt := make(map[hash.Hash]map[uint64]*cellAtt, len(rowAttProto.PkHashes))
 	for i := 0; i < len(rowAttProto.PkHashes); i++ {
 		pkHash := hash.New(rowAttProto.PkHashes[i])
 		tagToCell := rowAttProto.TagToCell[i]
 
-		tagToCellAtt := make(map[uint64]*cellAtt)
+		tagToCellAtt := make(map[uint64]*cellAtt, len(tagToCell.Tags))
 		for j := 0; j < len(tagToCell.Tags); j++ {
 			tag := tagToCell.Tags[j]
 			cell := tagToCell.CellAtt[j]
@@ -158,7 +194,7 @@ func deserializePastValues(hToIdx *payments.HashToIndex) map[hash.Hash]int16 {
 		return nil
 	}
 
-	pastValues := make(map[hash.Hash]int16)
+	pastValues := make(map[hash.Hash]int16, len(hToIdx.PastCommitIndexes))
 	for i := 0; i < len(hToIdx.PastCommitIndexes); i++ {
 		h := hToIdx.PastHashes[i]
 		idx := hToIdx.PastCommitIndexes[i]
