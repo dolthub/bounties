@@ -10,3 +10,5 @@ require (
 	github.com/stretchr/testify v1.6.1
 	google.golang.org/protobuf v1.25.0
 )
+
+replace github.com/dolthub/dolt/go => ../../dolt/go

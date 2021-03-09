@@ -28,13 +28,66 @@ type cellAtt struct {
 	CurrentOwner int16
 }
 
+func (att *cellAtt) AsValue(nbf *types.NomsBinFormat) (types.Value, error) {
+	vals := make([]types.Value, 1, 1+(2*len(att.PastValues)))
+	vals[0] = types.Int(att.CurrentOwner)
+
+	for h, n := range att.PastValues {
+		hCopy := h
+		vals = append(vals, types.InlineBlob(hCopy[:]))
+		vals = append(vals, types.Int(n))
+	}
+
+	return types.NewTuple(nbf, vals...)
+}
+
+func cellAttFromValue(v types.Value) (*cellAtt, error) {
+	t := v.(types.Tuple)
+	itr, err := t.Iterator()
+
+	if err != nil {
+		return nil, err
+	}
+
+	_, ownerVal, err := itr.Next()
+
+	if err != nil {
+		return nil, err
+	}
+
+	pastValues := make(map[hash.Hash]int16)
+	for itr.HasMore() {
+		_, hashBlobVal, err := itr.Next()
+
+		if err != nil {
+			return nil, err
+		}
+
+		hashBlob := hashBlobVal.(types.InlineBlob)
+		h := hash.New(hashBlob)
+
+		_, prevOwnerVal, err := itr.Next()
+
+		if err != nil {
+			return nil, err
+		}
+
+		pastValues[h] = int16(prevOwnerVal.(types.Int))
+	}
+
+	return &cellAtt{
+		CurrentOwner: int16(ownerVal.(types.Int)),
+		PastValues:   pastValues,
+	}, nil
+}
+
 func newCellAtt(commitIdx int16) *cellAtt {
 	return &cellAtt{CurrentOwner: commitIdx}
 }
 
 // Update updates the attribution state for a cell and is called whenever a value is changed. It returns the commit index
 // that this change is now owned by as well as the index of the commit that owned it previously
-func (att *cellAtt) Update(nbf *types.NomsBinFormat, commitIdx int16, oldVal, newVal types.Value) (int16, int16, error) {
+func (att *cellAtt) Update(nbf *types.NomsBinFormat, commitIdx int16, oldVal, newVal types.Value) (owner int16, prevOwner int16, err error) {
 	initialOwner := att.CurrentOwner
 
 	if newVal == nil {
@@ -58,17 +111,22 @@ func (att *cellAtt) Update(nbf *types.NomsBinFormat, commitIdx int16, oldVal, ne
 
 	// Need to look at past values of the cell if they exist so if a value is reverted to a value it previously held
 	// during the attribution period, the original commit that initially set this value receives the credit.
-	if att.PastValues != nil {
+	if len(att.PastValues) > 0 {
 		prevCommitAtNewHash, hasPrevCommitAtNewHash := att.PastValues[newHash]
-		_, hasPrevCommitAtOldHash := att.PastValues[oldHash]
 
-		// only update the past values if the value being replaced isn't already in the history
-		if !hasPrevCommitAtOldHash {
-			att.addPastValue(att.CurrentOwner, oldHash)
+		if att.CurrentOwner != -1 && !oldHash.IsEmpty() {
+			_, hasPrevCommitAtOldHash := att.PastValues[oldHash]
+
+			// only update the past values if the value being replaced isn't already in the history
+			if !hasPrevCommitAtOldHash {
+				att.addPastValue(att.CurrentOwner, oldHash)
+			}
 		}
 
 		if hasPrevCommitAtNewHash {
 			att.CurrentOwner = prevCommitAtNewHash
+			delete(att.PastValues, newHash)
+
 			return att.CurrentOwner, initialOwner, nil
 		}
 	} else {
@@ -98,11 +156,7 @@ func (att *cellAtt) Delete(nbf *types.NomsBinFormat, oldVal types.Value) error {
 		return err
 	}
 
-	if att.PastValues == nil {
-		att.PastValues = make(map[hash.Hash]int16)
-	}
-
-	att.PastValues[oldHash] = att.CurrentOwner
+	att.addPastValue(att.CurrentOwner, oldHash)
 	att.CurrentOwner = -1
 	return nil
 }

@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cellwise
+package differs
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/types"
 	"io"
@@ -24,8 +25,8 @@ import (
 )
 
 type kv struct {
-	key   types.Value
-	value types.Value
+	key   types.Tuple
+	value types.Tuple
 }
 
 func kvDiff(from, to *kv) (*diff.Difference, error) {
@@ -53,55 +54,50 @@ func kvDiff(from, to *kv) (*diff.Difference, error) {
 	}, nil
 }
 
-// Differ is an interface written to match what is already provided by the Dolt github.com/dolthub/dolt/go/libraries/doltcore/diff.AsyncDiffer
-type Differ interface {
-	// Start initializes the iterator to iterate over 2 maps
-	Start(ctx context.Context, from, to types.Map)
-	// Close cleans up any resources
-	Close() error
-	// are not available it will return what is available.  A timeout of 0 returns what is immediately available without waiting.
-	// a timeout of -1 will wait indefinitely until the number of diffs are available, or it can return all remaining diffs
-	GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error)
-}
-
-// dualMapIter is a Differ implementation which will returns every row.  We use this to iterate over every row in the
+// DualMapIter is a Differ implementation which will returns every row.  We use this to iterate over every row in the
 // case of a schema change
-type dualMapIter struct {
+type DualMapIter struct {
 	ctx     context.Context
 	nbf     *types.NomsBinFormat
 	isDone  bool
-	mItrs   [2]types.MapIterator
+	mRdrs   [2]*noms.NomsRangeReader
 	current [2]*kv
 }
 
 // Start initializes the iterator to iterate over 2 maps
-func (itr *dualMapIter) Start(ctx context.Context, from, to types.Map) {
+func (itr *DualMapIter) Start(ctx context.Context, from, to types.Map, start types.Value, inRange func(types.Value) (bool, error)) {
 	itr.ctx = ctx
 	itr.nbf = from.Format()
-	fromItr, err := from.Iterator(ctx)
 
-	if err != nil {
-		panic(err)
+	startTuple := types.EmptyTuple(itr.nbf)
+	if !types.IsNull(start) {
+		startTuple = start.(types.Tuple)
 	}
 
-	toItr, err := to.Iterator(ctx)
-
-	if err != nil {
-		panic(err)
+	readRange := &noms.ReadRange{
+		Start:     startTuple,
+		Inclusive: true,
+		Reverse:   false,
+		Check: func(tuple types.Tuple) (bool, error) {
+			return inRange(tuple)
+		},
 	}
 
-	itr.mItrs = [2]types.MapIterator{fromItr, toItr}
+	fromReader := noms.NewNomsRangeReader(nil, from, []*noms.ReadRange{readRange})
+	toReader := noms.NewNomsRangeReader(nil, to, []*noms.ReadRange{readRange})
+
+	itr.mRdrs = [2]*noms.NomsRangeReader{fromReader, toReader}
 }
 
 // Close cleans up any resources
-func (itr *dualMapIter) Close() error {
+func (itr *DualMapIter) Close() error {
 	return nil
 }
 
 // GetDiffs gets up to the specified number of diffs.  A timeout can be specified and if the requested number of diffs
 // are not available it will return what is available.  A timeout of 0 returns what is immediately available without waiting.
 // a timeout of -1 will wait indefinitely until the number of diffs are available, or it can return all remaining diffs
-func (itr *dualMapIter) GetDiffs(numDiffs int, _ time.Duration) ([]*diff.Difference, bool, error) {
+func (itr *DualMapIter) GetDiffs(numDiffs int, _ time.Duration) ([]*diff.Difference, bool, error) {
 	if numDiffs == 0 {
 		numDiffs = math.MaxInt32
 	}
@@ -124,17 +120,17 @@ func (itr *dualMapIter) GetDiffs(numDiffs int, _ time.Duration) ([]*diff.Differe
 	return results, len(results) > 0, nil
 }
 
-func (itr *dualMapIter) getDiff() (*diff.Difference, error) {
+func (itr *DualMapIter) getDiff() (*diff.Difference, error) {
 	// update the our current key / value pairs when necessary
 	for i := 0; i < 2; i++ {
 		if itr.current[i] == nil {
-			key, val, err := itr.mItrs[i].Next(itr.ctx)
+			key, val, err := itr.mRdrs[i].ReadKV(itr.ctx)
 
 			if err != nil && err != io.EOF {
 				return nil, err
 			}
 
-			if err != io.EOF && key != nil {
+			if err != io.EOF {
 				itr.current[i] = &kv{key, val}
 			}
 		}

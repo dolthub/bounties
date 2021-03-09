@@ -16,16 +16,19 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
-	
+	"strconv"
+
 	"github.com/pkg/profile"
 
+	"github.com/dolthub/bounties/go/payments/pkg/att"
 	"github.com/dolthub/bounties/go/payments/pkg/cellwise"
 	"github.com/dolthub/bounties/go/payments/pkg/doltutils"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -33,13 +36,12 @@ import (
 )
 
 type options struct {
-	repoDir           string
-	startHash         hash.Hash
-	endHash           hash.Hash
-	incremantalDir    string
-	updateIncremental bool
-	profile           string
-	profileHash       hash.Hash
+	repoDir     string
+	startHash   hash.Hash
+	endHash     hash.Hash
+	buildDir    string
+	profile     string
+	profileHash hash.Hash
 }
 
 func startProfiling(profileType string) func() {
@@ -58,7 +60,7 @@ func startProfiling(profileType string) func() {
 		return profile.Start(profile.TraceProfile).Stop
 	default:
 		panic("Unexpected prof flag: " + profileType)
-	}	
+	}
 }
 
 func errExit(message string) {
@@ -69,17 +71,16 @@ func errExit(message string) {
 func main() {
 	ctx := context.Background()
 
-	method := flag.String("method", "", "The method used to calculate payments.  Supported options: 'cellwise'")
+	methodStr := flag.String("method", "", "The method used to calculate payments.  Supported options: 'cellwise'")
 	repoDir := flag.String("repo-dir", "./", "Directory of the repository being examened")
 	startHash := flag.String("start", "", "Commit hash representing the start of a bounty before any contributions are made.")
 	endHash := flag.String("end", "", "Last commit hash included in the payment calculation.")
-	incremental := flag.String("incremental", "", "When a directory is provided, incremental attribution is enabled and state files are read from and written to the provided directory.")
-	dontUpdateIncremental := flag.Bool("dont-update-incremental", false, "Only read from the incremental dir, do not write back to it.")
+	buildDir := flag.String("build-dir", "", "directory where build files are output")
 	profileType := flag.String("profile", "", "options are (cpu,mem,blocking,trace)")
 	profileHashStr := flag.String("profile-hash", "", "commit hash to limit profiling to")
 	flag.Parse()
 
-	if len(*method) == 0 {
+	if len(*methodStr) == 0 {
 		errExit("Missing required parameter '-method'.")
 	}
 
@@ -100,7 +101,7 @@ func main() {
 
 	var profileHash hash.Hash
 	if len(*profileHashStr) != 0 {
-		profileHash, ok = hash.MaybeParse(*endHash);
+		profileHash, ok = hash.MaybeParse(*endHash)
 		if !ok {
 			errExit(fmt.Sprintf("Invalid hash: '%s'", *endHash))
 		}
@@ -118,20 +119,19 @@ func main() {
 		errExit(fmt.Sprintf("Could not change path to '%s'", *repoDir))
 	}
 
-	absIncremental, err := validateDirectory(*incremental)
+	absBuildDir, err := validateDirectory(*buildDir)
 
 	if err != nil {
 		errExit(err.Error())
 	}
 
 	opts := options{
-		repoDir:           absPath,
-		startHash:         start,
-		endHash:           end,
-		incremantalDir:    absIncremental,
-		updateIncremental: !*dontUpdateIncremental,
-		profile:           *profileType,
-		profileHash:       profileHash,
+		repoDir:     absPath,
+		startHash:   start,
+		endHash:     end,
+		buildDir:    absBuildDir,
+		profile:     *profileType,
+		profileHash: profileHash,
 	}
 
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, "")
@@ -146,20 +146,34 @@ func main() {
 		errExit(fmt.Sprintf("Failed to load dolt repo state: %v", dEnv.RSLoadErr))
 	}
 
-	switch *method {
+	var method att.Method
+	switch *methodStr {
 	case "cellwise":
-		err = calcCellwisePayments(ctx, dEnv, opts)
+		shardParams := cellwise.CWAttShardParams{
+			RowsPerShard: 100_000,
+			MinShardSize: 10_000,
+		}
+		shardStore, err := att.NewFilesysShardStore(opts.buildDir)
+
+		if err != nil {
+			errExit(fmt.Sprintf("Failed to create local shardstore using the directory '%s': %v", opts.buildDir, err))
+		}
+
+		method = cellwise.NewCWAtt(dEnv.DoltDB, opts.buildDir, opts.startHash, shardStore, shardParams)
 	default:
-		errExit(fmt.Sprintf("Unknown --method '%s'", *method))
+		errExit(fmt.Sprintf("Unknown --method '%s'", *methodStr))
 	}
+
+	err = calcAttribution(ctx, method, dEnv.DoltDB, opts)
 
 	if err != nil {
 		errExit(fmt.Sprintf("Error occurred while running calculations: %v", err))
 	}
 }
 
-func calcCellwisePayments(ctx context.Context, dEnv *env.DoltEnv, opts options) error {
-	mergeCommits, err := doltutils.GetMergeCommitsBetween(ctx, dEnv.DoltDB, opts.startHash, opts.endHash)
+func calcAttribution(ctx context.Context, method att.Method, ddb *doltdb.DoltDB, opts options) error {
+	// mergeCommits will be ordered from most recent to least recent
+	mergeCommits, err := doltutils.GetMergeCommitsBetween(ctx, ddb, opts.startHash, opts.endHash)
 
 	if err != nil {
 		return err
@@ -170,110 +184,116 @@ func calcCellwisePayments(ctx context.Context, dEnv *env.DoltEnv, opts options) 
 		defer stopProfFunc()
 	}
 
-	i, att, err := readIncremental(opts.startHash, mergeCommits, opts.incremantalDir)
+	i, summary, err := readLatestSummary(ctx, method, mergeCommits)
 
 	if err != nil {
 		return err
 	}
 
-	for ; i >= 0; i-- {
-		currHash, err := mergeCommits[i].HashOf()
+	var prevCommit *doltdb.Commit
+	prevCommitIdx := len(mergeCommits) - i - 1
+	if prevCommitIdx >= 0 {
+		prevCommit = mergeCommits[prevCommitIdx]
+	}
+
+	if summary == nil {
+		if prevCommitIdx >= 0 {
+			return errors.New("failed to read summary for latest commit")
+		}
+
+		summary = method.EmptySummary(ctx)
+	}
+
+	for i--; i >= 0; i-- {
+		commitIdx := len(mergeCommits) - i - 1
+		commit := mergeCommits[i]
+		shardInfo, err := method.CollectShards(ctx, mergeCommits[i], summary)
 
 		if err != nil {
 			return err
 		}
 
-		err2 := calcCellwisePaymentsForCommit(ctx, dEnv, opts, att, currHash)
-		if err2 != nil {
-			return err2
-		}
-	}
-
-	return nil
-}
-
-func calcCellwisePaymentsForCommit(ctx context.Context, dEnv *env.DoltEnv, opts options, att *cellwise.DatabaseAttribution, currHash hash.Hash) error {
-	if opts.profile != "" && opts.profileHash.Equal(currHash) {
-		stopProfFunc := startProfiling(opts.profile)
-		defer stopProfFunc()
-	}
-
-	err := att.Update(ctx, dEnv.DoltDB, opts.startHash, currHash)
-
-	if err != nil {
-		return err
-	}
-
-	if opts.updateIncremental {
-		err = updateIncrementalDir(att, opts.incremantalDir)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	fmt.Printf("Attribution as of %s:\n", currHash.String())
-	nameToCommitToCounts := att.GetCounts()
-	for commit, count := range nameToCommitToCounts {
-		fmt.Printf("\t%s: %d\n", commit.String(), count)
-	}
-
-	return nil
-}
-
-func readIncremental(start hash.Hash, mergeCommits []*doltdb.Commit, incrementalDir string) (int, *cellwise.DatabaseAttribution, error) {
-	if incrementalDir != "" {
-		for i := 0; i < len(mergeCommits); i++ {
-			commit := mergeCommits[i]
-			h, err := commit.HashOf()
+		var results []att.ShardResult
+		for _, shard := range shardInfo {
+			result, err := method.ProcessShard(ctx, int16(commitIdx), commit, prevCommit, shard)
 
 			if err != nil {
-				return 0, nil, err
+				return err
 			}
 
-			incrementalFile := filepath.Join(incrementalDir, start.String()+"_"+h.String())
-			stat, err := os.Stat(incrementalFile)
-
-			if err == nil {
-				if stat.IsDir() {
-					return 0, nil, fmt.Errorf("A directory exists at '%s'", incrementalFile)
-				}
-
-				data, err := ioutil.ReadFile(incrementalFile)
-
-				if err != nil {
-					return 0, nil, err
-				}
-
-				att, err := cellwise.Deserialize(data)
-
-				if err != nil {
-					return 0, nil, err
-				}
-
-				return i - 1, att, nil
-			}
+			results = append(results, result)
 		}
-	}
 
-	return len(mergeCommits) - 1, cellwise.NewDatabaseAttribution(start), nil
-}
-
-func updateIncrementalDir(att *cellwise.DatabaseAttribution, incrementalDir string) error {
-	if incrementalDir != "" {
-		data, err := cellwise.Serialize(att)
+		commitHash, err := commit.HashOf()
 
 		if err != nil {
 			return err
 		}
 
-		start := att.AttribStartPoint.String()
-		current := att.Commits[len(att.Commits)-1].String()
-		incrementalFile := filepath.Join(incrementalDir, start+"_"+current)
-		return ioutil.WriteFile(incrementalFile, data, os.ModePerm)
+		summary, err = method.ProcessResults(ctx, commitHash, summary, results)
+
+		if err != nil {
+			return err
+		}
+
+		err = method.WriteSummary(ctx, summary)
+
+		if err != nil {
+			return err
+		}
+
+		printSummaryInfo(ctx, summary, mergeCommits[i:])
+
+		prevCommit = commit
 	}
 
 	return nil
+}
+
+func readLatestSummary(ctx context.Context, method att.Method, mergeCommits []*doltdb.Commit) (int, att.Summary, error) {
+	for i, cm := range mergeCommits {
+		h, err := cm.HashOf()
+
+		if err != nil {
+			return 0, nil, err
+		}
+
+		summary, err := method.ReadSummary(ctx, h)
+
+		if err == att.ErrSummaryDoesntExist {
+			continue
+		} else if err != nil {
+			return 0, nil, err
+		}
+
+		return i, summary, nil
+	}
+
+	return len(mergeCommits), nil, nil
+}
+
+func printSummaryInfo(ctx context.Context, summary att.Summary, commits []*doltdb.Commit) {
+	commitToCount, err := summary.CommitToCount(ctx)
+
+	if err != nil {
+		panic(err)
+	}
+
+	for _, commit := range commits {
+		h, err := commit.HashOf()
+
+		if err != nil {
+			panic(err)
+		}
+
+		count, ok := commitToCount[h]
+
+		if !ok {
+			panic("failed to find count for " + h.String())
+		}
+
+		fmt.Println(h.String()+":", strconv.FormatUint(count, 10))
+	}
 }
 
 func validateDirectory(dir string) (string, error) {

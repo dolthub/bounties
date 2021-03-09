@@ -16,6 +16,7 @@ package attteststate
 
 import (
 	"context"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -209,7 +210,7 @@ func genTableState(ctx context.Context, vrw types.ValueReadWriter) ([]tableState
 
 	me = m.Edit()
 	// *** schema updated
-	// Adds 100 rows that have existed before with 4 columns (pk, col1, col2, col4), pk, col1 and col2 values from p`revious commits
+	// Adds 100 rows that have existed before with 4 columns (pk, col1, col2, col4), pk, col1 and col2 values from previous commits
 	for i := uint64(100); i < 200; i++ {
 		r, err := row.New(nbf, UpdatedSch, row.TaggedValues{
 			pkTag:   types.Uint(i),
