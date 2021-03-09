@@ -2,6 +2,7 @@ package cellwise
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strings"
 
@@ -108,10 +109,18 @@ func (cwa CWAttribution) ReadSummary(ctx context.Context, commitHash hash.Hash) 
 	return summary, nil
 }
 
-func (cwa CWAttribution) CollectShards(ctx context.Context, commit *doltdb.Commit, summary att.Summary) ([]att.ShardInfo, error) {
+func (cwa CWAttribution) CollectShards(ctx context.Context, commit, prevCommit *doltdb.Commit, summary att.Summary) ([]att.ShardInfo, error) {
 	root, err := commit.GetRootValue()
 	if err != nil {
 		return nil, err
+	}
+
+	var prevRoot *doltdb.RootValue
+	if prevCommit != nil {
+		prevRoot, err = prevCommit.GetRootValue()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var cws CellwiseAttSummary
@@ -121,30 +130,88 @@ func (cwa CWAttribution) CollectShards(ctx context.Context, commit *doltdb.Commi
 		cws = summary.(CellwiseAttSummary)
 	}
 
-	return cwa.collectShards(ctx, cws, root)
+	return cwa.collectShards(ctx, cws, root, prevRoot)
 }
 
-func (cwa CWAttribution) collectShards(ctx context.Context, summary CellwiseAttSummary, root *doltdb.RootValue) ([]att.ShardInfo, error) {
+func (cwa CWAttribution) collectShards(ctx context.Context, summary CellwiseAttSummary, root, prevRoot *doltdb.RootValue) ([]att.ShardInfo, error) {
 	tables, err := cwa.getScoredTables(ctx, summary, root)
 
 	if err != nil {
 		return nil, err
 	}
 
-	allShards := make([]att.ShardInfo, 0, 16)
+	allShards := make([]att.ShardInfo, 0, len(tables)*16)
 	for _, table := range tables {
 		shards, ok := summary.TableShards[table]
 
 		if !ok {
-			shards = []AttributionShard{{Table: table, StartInclusive: types.NullValue, EndExclusive: types.NullValue}}
+			allShards = append(allShards, AttributionShard{Table: table, StartInclusive: types.NullValue, EndExclusive: types.NullValue})
+			continue
 		}
 
-		for _, shard := range shards {
-			allShards = append(allShards, shard)
+		hasDiffs, err := cwa.shardsHaveDiffs(ctx, shards, table, root, prevRoot)
+		if err != nil {
+			return nil, err
+		}
+
+		for i := range shards {
+			if hasDiffs[i] {
+				allShards = append(allShards, shards[i])
+			} else {
+				allShards = append(allShards, UnchangedShard{shards[i]})
+			}
 		}
 	}
 
 	return allShards, nil
+}
+
+func (cwa CWAttribution) shardsHaveDiffs(ctx context.Context, shards []AttributionShard, table string, root, prevRoot *doltdb.RootValue) ([]bool, error) {
+	var tblHash hash.Hash
+	var prevTblHash hash.Hash
+
+	tbl, ok, err := root.GetTable(ctx, table)
+	if err != nil {
+		return nil, err
+	}
+
+	if ok {
+		tblHash, err = tbl.HashOf()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	prevTbl, ok, err := prevRoot.GetTable(ctx, table)
+	if err != nil {
+		return nil, err
+	}
+
+	if ok {
+		prevTblHash, err = prevTbl.HashOf()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	hasDiffs := make([]bool, len(shards))
+	if !tblHash.Equal(prevTblHash) {
+		for i, shard := range shards {
+			_, differ, err := cwa.getDiffer(ctx, shard, tbl, prevTbl)
+			if err != nil {
+				return nil, err
+			}
+
+			diffs, _, err := differ.GetDiffs(1, -1)
+			if err != nil {
+				return nil, err
+			}
+
+			hasDiffs[i] = len(diffs) != 0
+		}
+	}
+
+	return hasDiffs, err
 }
 
 func (cwa CWAttribution) getScoredTables(ctx context.Context, summary CellwiseAttSummary, root *doltdb.RootValue) ([]string, error) {
@@ -167,60 +234,8 @@ func (cwa CWAttribution) getScoredTables(ctx context.Context, summary CellwiseAt
 		return true
 	})
 
-	return unique.AsSlice(), nil
+	return scoredTables, nil
 }
-
-/*func (cwa CWAttribution) processShards(ctx context.Context, summary CellwiseAttSummary, commitHash hash.Hash, shards []AttributionShard, root, prevRoot *doltdb.RootValue) (att.Summary, error) {
-	basePath := cwa.shardStore.Join(cwa.startHash.String(), commitHash.String())
-	allNewShards := make(map[string][]AttributionShard)
-	commitIdx := summary.NumCommits()
-	commitCounts := make([]uint64, commitIdx+1)
-
-	for _, shard := range shards {
-		tableName := shard.Table
-		tbl, _, err := root.GetTable(ctx, tableName)
-
-		if err != nil {
-			return nil, err
-		}
-
-		var prevTbl *doltdb.Table
-		if prevRoot != nil {
-			prevTbl, _, err = prevRoot.GetTable(ctx, tableName)
-
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		newShards, err := cwa.processSingleShard(ctx, commitIdx, basePath, shard, tbl, prevTbl)
-
-		if err != nil {
-			return nil, err
-		}
-
-		allNewShards[tableName] = append(allNewShards[tableName], newShards...)
-	}
-
-	commitHashes := make([]hash.Hash, len(summary.CommitHashes)+1)
-	copy(commitHashes, summary.CommitHashes)
-	commitHashes[commitIdx] = commitHash
-
-	for _, tableShards := range allNewShards {
-		for _, shard := range tableShards {
-			for idx, count := range shard.CommitCounts {
-				commitCounts[idx] += count
-			}
-		}
-	}
-
-	return CellwiseAttSummary{
-		StartHash:    summary.StartHash,
-		CommitHashes: commitHashes,
-		CommitCounts: commitCounts,
-		TableShards:  allNewShards,
-	}, nil
-}*/
 
 //func (cwa CWAttribution) processSingleShard(ctx context.Context, commitIdx int16, basePath string, shard AttributionShard, tbl, prevTbl *doltdb.Table) ([]AttributionShard, error)
 func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *doltdb.Commit, shardInfo att.ShardInfo) (att.ShardResult, error) {
@@ -243,6 +258,11 @@ func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, 
 	}
 
 	basePath := cwa.shardStore.Join(cwa.startHash.String(), commitHash.String())
+
+	if unchangedShard, ok := shardInfo.(UnchangedShard); ok {
+		return processUnchangedShard(ctx, unchangedShard.AttributionShard)
+	}
+
 	shard := shardInfo.(AttributionShard)
 	tableName := shard.Table
 	tbl, _, err := root.GetTable(ctx, tableName)
@@ -307,6 +327,21 @@ func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, 
 	}
 
 	return shardMgr.getShards(), nil
+}
+
+func processUnchangedShard(ctx context.Context, shard AttributionShard) (att.ShardResult, error) {
+	fmt.Println(shard.Path, "is unchanged")
+	// updated counts are the same as previous, but have an extra 0 for this commit
+	updatedCounts := make([]uint64, len(shard.CommitCounts)+1)
+	copy(updatedCounts, shard.CommitCounts)
+
+	return []AttributionShard{{
+		Table:          shard.Table,
+		StartInclusive: shard.StartInclusive,
+		EndExclusive:   shard.EndExclusive,
+		Path:           shard.Path,
+		CommitCounts:   updatedCounts,
+	}}, nil
 }
 
 func (cwa CWAttribution) ProcessResults(ctx context.Context, commitHash hash.Hash, prevSummary att.Summary, results []att.ShardResult) (att.Summary, error) {

@@ -3,7 +3,6 @@ package cellwise
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/dolthub/bounties/go/payments/pkg/att"
@@ -95,8 +94,6 @@ func (sm *shardManager) close(ctx context.Context) error {
 
 func (sm *shardManager) closeCurrentShard(ctx context.Context, end types.Value) error {
 	if sm.rowsInCurrShard > 0 {
-		fmt.Println("Closing shard of size", sm.rowsInCurrShard)
-
 		close(sm.streamMapCh)
 		m, err := sm.outMap.Wait()
 

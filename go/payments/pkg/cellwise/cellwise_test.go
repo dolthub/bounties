@@ -168,7 +168,7 @@ func TestAttribution(t *testing.T) {
 				commit := commits[int16(len(commits)-(i+1))]
 				require.NoError(t, err)
 
-				shards, err := cwAtt.CollectShards(ctx, commit, summary)
+				shards, err := cwAtt.CollectShards(ctx, commit, prevCommit, summary)
 				require.NoError(t, err)
 
 				var results []att.ShardResult

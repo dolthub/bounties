@@ -207,7 +207,7 @@ func calcAttribution(ctx context.Context, method att.Method, ddb *doltdb.DoltDB,
 	for i--; i >= 0; i-- {
 		commitIdx := len(mergeCommits) - i - 1
 		commit := mergeCommits[i]
-		shardInfo, err := method.CollectShards(ctx, mergeCommits[i], summary)
+		shardInfo, err := method.CollectShards(ctx, commit, prevCommit, summary)
 
 		if err != nil {
 			return err

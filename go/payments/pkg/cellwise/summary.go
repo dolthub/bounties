@@ -29,6 +29,10 @@ func (as AttributionShard) inRangeFunc(nbf *types.NomsBinFormat) func(v types.Va
 	}
 }
 
+type UnchangedShard struct {
+	AttributionShard
+}
+
 var _ att.Summary = (*CellwiseAttSummary)(nil)
 
 type CellwiseAttSummary struct {

@@ -20,7 +20,7 @@ type ShardResult interface{}
 type Method interface {
 	EmptySummary(ctx context.Context) Summary
 	ReadSummary(ctx context.Context, commitHash hash.Hash) (Summary, error)
-	CollectShards(ctx context.Context, commit *doltdb.Commit, summary Summary) ([]ShardInfo, error)
+	CollectShards(ctx context.Context, commit, prevCommit *doltdb.Commit, summary Summary) ([]ShardInfo, error)
 	ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *doltdb.Commit, shardInfo ShardInfo) (ShardResult, error)
 	ProcessResults(ctx context.Context, commitHash hash.Hash, prevSummary Summary, results []ShardResult) (Summary, error)
 	WriteSummary(ctx context.Context, summary Summary) error
