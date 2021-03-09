@@ -2,7 +2,6 @@ package cellwise
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"strings"
 
@@ -282,25 +281,6 @@ func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, 
 	nbf := cwa.ddb.Format()
 	tableShardPath := cwa.shardStore.Join(basePath, tableName)
 
-	// table not in the current root.  Carry historical attribution data over
-	if tbl == nil {
-		destPath := cwa.shardStore.Join(tableShardPath, shardName(nbf, shard.StartInclusive, shard.EndExclusive))
-		err := cwa.shardStore.CopyShard(ctx, shard.Path, destPath)
-		if err != nil {
-			return nil, err
-		}
-
-		newShard := AttributionShard{
-			Table:          tableName,
-			StartInclusive: shard.StartInclusive,
-			EndExclusive:   shard.EndExclusive,
-			Path:           destPath,
-			CommitCounts:   make([]uint64, len(shard.CommitCounts)+1),
-		}
-
-		return []AttributionShard{newShard}, nil
-	}
-
 	sch, differ, err := cwa.getDiffer(ctx, shard, tbl, prevTbl)
 	if err != nil {
 		return nil, err
@@ -330,7 +310,6 @@ func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, 
 }
 
 func processUnchangedShard(ctx context.Context, shard AttributionShard) (att.ShardResult, error) {
-	fmt.Println(shard.Path, "is unchanged")
 	// updated counts are the same as previous, but have an extra 0 for this commit
 	updatedCounts := make([]uint64, len(shard.CommitCounts)+1)
 	copy(updatedCounts, shard.CommitCounts)

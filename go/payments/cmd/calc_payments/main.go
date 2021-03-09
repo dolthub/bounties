@@ -19,11 +19,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/pkg/profile"
 	"os"
 	"path/filepath"
 	"strconv"
-
-	"github.com/pkg/profile"
 
 	"github.com/dolthub/bounties/go/payments/pkg/att"
 	"github.com/dolthub/bounties/go/payments/pkg/cellwise"
@@ -193,7 +192,7 @@ func calcAttribution(ctx context.Context, method att.Method, ddb *doltdb.DoltDB,
 	var prevCommit *doltdb.Commit
 	prevCommitIdx := len(mergeCommits) - i - 1
 	if prevCommitIdx >= 0 {
-		prevCommit = mergeCommits[prevCommitIdx]
+		prevCommit = mergeCommits[len(mergeCommits)-prevCommitIdx-1]
 	}
 
 	if summary == nil {
@@ -207,6 +206,21 @@ func calcAttribution(ctx context.Context, method att.Method, ddb *doltdb.DoltDB,
 	for i--; i >= 0; i-- {
 		commitIdx := len(mergeCommits) - i - 1
 		commit := mergeCommits[i]
+		commitHash, err := commit.HashOf()
+		if err != nil {
+			return err
+		}
+
+		var prevCommitHash hash.Hash
+		if prevCommit != nil {
+			prevCommitHash, err = prevCommit.HashOf()
+			if err != nil {
+				return err
+			}
+		}
+
+		fmt.Println("Processing:", commitHash.String(), "parent:", prevCommitHash.String())
+
 		shardInfo, err := method.CollectShards(ctx, commit, prevCommit, summary)
 
 		if err != nil {
@@ -222,12 +236,6 @@ func calcAttribution(ctx context.Context, method att.Method, ddb *doltdb.DoltDB,
 			}
 
 			results = append(results, result)
-		}
-
-		commitHash, err := commit.HashOf()
-
-		if err != nil {
-			return err
 		}
 
 		summary, err = method.ProcessResults(ctx, commitHash, summary, results)

@@ -45,7 +45,7 @@ func (f *FilesysShardStore) WriteShard(ctx context.Context, key string, store *v
 		return err
 	}
 
-	fmt.Println("writing", absPath)
+	//fmt.Println("writing", absPath)
 	return valuefile.WriteValueFile(ctx, absPath, store, shardVal)
 }
 

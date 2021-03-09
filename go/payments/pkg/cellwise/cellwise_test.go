@@ -97,7 +97,6 @@ func getCellwiseExpected() [][]uint64 {
 }
 
 func assertOnExpectedAttribution(t *testing.T, expected []uint64, summary CellwiseAttSummary) {
-	fmt.Println(summary.CommitCounts)
 	require.Equal(t, expected, summary.CommitCounts)
 }
 

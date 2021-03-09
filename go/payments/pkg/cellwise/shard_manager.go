@@ -112,6 +112,15 @@ func (sm *shardManager) closeCurrentShard(ctx context.Context, end types.Value) 
 			startKey = sm.inputShard.StartInclusive
 		}
 
+		// Create copies of start and end key tuples so larger objects are able to be cleaned up.
+		if !types.IsNull(startKey) {
+			startKey = startKey.(types.Tuple).CopyOf(nil)
+		}
+
+		if !types.IsNull(end) {
+			end = end.(types.Tuple).CopyOf(nil)
+		}
+
 		path := sm.shardStore.Join(sm.shardBasePath, shardName(sm.nbf, startKey, end))
 		err = sm.shardStore.WriteShard(ctx, path, sm.currStore, m)
 
