@@ -28,65 +28,6 @@ type cellAtt struct {
 	CurrentOwner int16
 }
 
-func (att *cellAtt) AsValue(nbf *types.NomsBinFormat, buffs *rowAttEncodingBuffers) (types.Value, error) {
-	buffs.cellVals = append(buffs.cellVals, types.Int(att.CurrentOwner))
-
-	for h, n := range att.PastValues {
-		hCopy := h
-		buffs.cellVals = append(buffs.cellVals, types.InlineBlob(hCopy[:]))
-		buffs.cellVals = append(buffs.cellVals, types.Int(n))
-	}
-
-	t, err := types.NewTuple(nbf, buffs.cellVals...)
-
-	if err != nil {
-		return nil, err
-	}
-
-	buffs.cellVals = buffs.cellVals[:0]
-	return t, nil
-}
-
-func cellAttFromValue(v types.Value) (*cellAtt, error) {
-	t := v.(types.Tuple)
-	itr, err := t.Iterator()
-
-	if err != nil {
-		return nil, err
-	}
-
-	_, ownerVal, err := itr.Next()
-
-	if err != nil {
-		return nil, err
-	}
-
-	pastValues := make(map[hash.Hash]int16)
-	for itr.HasMore() {
-		_, hashBlobVal, err := itr.Next()
-
-		if err != nil {
-			return nil, err
-		}
-
-		hashBlob := hashBlobVal.(types.InlineBlob)
-		h := hash.New(hashBlob)
-
-		_, prevOwnerVal, err := itr.Next()
-
-		if err != nil {
-			return nil, err
-		}
-
-		pastValues[h] = int16(prevOwnerVal.(types.Int))
-	}
-
-	return &cellAtt{
-		CurrentOwner: int16(ownerVal.(types.Int)),
-		PastValues:   pastValues,
-	}, nil
-}
-
 func newCellAtt(commitIdx int16) *cellAtt {
 	return &cellAtt{CurrentOwner: commitIdx}
 }

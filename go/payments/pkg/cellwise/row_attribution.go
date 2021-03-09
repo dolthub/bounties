@@ -2,6 +2,7 @@ package cellwise
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/store/hash"
 	"sort"
 	"strings"
 
@@ -18,16 +19,14 @@ const (
 )
 
 type rowAttEncodingBuffers struct {
-	tags     []uint64
-	rowVals  []types.Value
-	cellVals []types.Value
+	tags    []uint64
+	rowVals []types.Value
 }
 
 func NewRowAttEncodingBuffers() *rowAttEncodingBuffers {
 	buffs := &rowAttEncodingBuffers{
-		tags:     make([]uint64, initialTags),
-		rowVals:  make([]types.Value, initialTags*2),
-		cellVals: make([]types.Value, (2*maxPastValuesInitial)+1),
+		tags:    make([]uint64, initialTags),
+		rowVals: make([]types.Value, initialTags*8),
 	}
 
 	buffs.reset()
@@ -37,7 +36,6 @@ func NewRowAttEncodingBuffers() *rowAttEncodingBuffers {
 func (buffs *rowAttEncodingBuffers) reset() {
 	buffs.tags = buffs.tags[:0]
 	buffs.rowVals = buffs.rowVals[:0]
-	buffs.cellVals = buffs.cellVals[:0]
 }
 
 type rowAtt map[uint64]*cellAtt
@@ -56,14 +54,17 @@ func (ra rowAtt) AsValue(nbf *types.NomsBinFormat, buffs *rowAttEncodingBuffers)
 	})
 
 	for _, tag := range buffs.tags {
+		ca := ra[tag]
+
 		buffs.rowVals = append(buffs.rowVals, types.Uint(tag))
-		cellVal, err := ra[tag].AsValue(nbf, buffs)
+		buffs.rowVals = append(buffs.rowVals, types.Int(ca.CurrentOwner))
+		buffs.rowVals = append(buffs.rowVals, types.Uint(len(ca.PastValues)))
 
-		if err != nil {
-			return nil, err
+		for h, n := range ca.PastValues {
+			hCopy := h
+			buffs.rowVals = append(buffs.rowVals, types.InlineBlob(hCopy[:]))
+			buffs.rowVals = append(buffs.rowVals, types.Int(n))
 		}
-
-		buffs.rowVals = append(buffs.rowVals, cellVal)
 	}
 
 	t, err := types.NewTuple(nbf, buffs.rowVals...)
@@ -87,24 +88,47 @@ func rowAttFromValue(v types.Value) (rowAtt, error) {
 	ra := make(rowAtt)
 	for itr.HasMore() {
 		_, tag, err := itr.NextUint64()
-
 		if err != nil {
 			return nil, err
 		}
 
-		_, val, err := itr.Next()
-
+		_, currOwnerVal, err := itr.Next()
 		if err != nil {
 			return nil, err
 		}
 
-		ca, err := cellAttFromValue(val)
-
+		_, pastValCount, err := itr.NextUint64()
 		if err != nil {
 			return nil, err
 		}
 
-		ra[tag] = ca
+		var pastVals map[hash.Hash]int16
+		if pastValCount > 0 {
+			pastVals = make(map[hash.Hash]int16, pastValCount)
+			for i := uint64(0); i < pastValCount; i++ {
+				_, hashBlobVal, err := itr.Next()
+
+				if err != nil {
+					return nil, err
+				}
+
+				hashBlob := hashBlobVal.(types.InlineBlob)
+				h := hash.New(hashBlob)
+
+				_, prevOwnerVal, err := itr.Next()
+
+				if err != nil {
+					return nil, err
+				}
+
+				pastVals[h] = int16(prevOwnerVal.(types.Int))
+			}
+		}
+
+		ra[tag] = &cellAtt{
+			CurrentOwner: int16(currOwnerVal.(types.Int)),
+			PastValues:   pastVals,
+		}
 	}
 
 	return ra, nil
