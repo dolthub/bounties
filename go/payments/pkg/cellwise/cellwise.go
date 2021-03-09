@@ -494,7 +494,7 @@ func (cwa CWAttribution) processDiffWithNoPrevAtt(ctx context.Context, shardMgr 
 		return err
 	}
 
-	return shardMgr.addRowAtt(ctx, difference.KeyValue, ra)
+	return shardMgr.addRowAtt(ctx, difference.KeyValue, ra, nil)
 }
 
 func (cwa CWAttribution) processUnchangedAttribution(ctx context.Context, shardMgr *shardManager, key types.Value, val types.Value) error {
@@ -503,7 +503,7 @@ func (cwa CWAttribution) processUnchangedAttribution(ctx context.Context, shardM
 		return err
 	}
 
-	return shardMgr.addRowAtt(ctx, key, ra)
+	return shardMgr.addRowAtt(ctx, key, ra, val)
 }
 
 func (cwa CWAttribution) updateAttFromDiff(ctx context.Context, shardMgr *shardManager, sch schema.Schema, commitIdx int16, key types.Value, val types.Value, difference *diff2.Difference) error {
@@ -518,5 +518,5 @@ func (cwa CWAttribution) updateAttFromDiff(ctx context.Context, shardMgr *shardM
 		return err
 	}
 
-	return shardMgr.addRowAtt(ctx, key, ra)
+	return shardMgr.addRowAtt(ctx, key, ra, nil)
 }

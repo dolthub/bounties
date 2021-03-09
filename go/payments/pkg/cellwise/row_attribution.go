@@ -12,34 +12,68 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+const (
+	initialTags          = 2048
+	maxPastValuesInitial = 1024
+)
+
+type rowAttEncodingBuffers struct {
+	tags     []uint64
+	rowVals  []types.Value
+	cellVals []types.Value
+}
+
+func NewRowAttEncodingBuffers() *rowAttEncodingBuffers {
+	buffs := &rowAttEncodingBuffers{
+		tags:     make([]uint64, initialTags),
+		rowVals:  make([]types.Value, initialTags*2),
+		cellVals: make([]types.Value, (2*maxPastValuesInitial)+1),
+	}
+
+	buffs.reset()
+	return buffs
+}
+
+func (buffs *rowAttEncodingBuffers) reset() {
+	buffs.tags = buffs.tags[:0]
+	buffs.rowVals = buffs.rowVals[:0]
+	buffs.cellVals = buffs.cellVals[:0]
+}
+
 type rowAtt map[uint64]*cellAtt
 
 func newRowAtt() rowAtt {
 	return make(rowAtt)
 }
 
-func (ra rowAtt) AsValue(nbf *types.NomsBinFormat) (types.Value, error) {
-	tags := make([]uint64, 0, len(ra))
+func (ra rowAtt) AsValue(nbf *types.NomsBinFormat, buffs *rowAttEncodingBuffers) (types.Value, error) {
 	for tag := range ra {
-		tags = append(tags, tag)
+		buffs.tags = append(buffs.tags, tag)
 	}
 
-	sort.Slice(tags, func(i, j int) bool {
-		return tags[i] < tags[j]
+	sort.Slice(buffs.tags, func(i, j int) bool {
+		return buffs.tags[i] < buffs.tags[j]
 	})
 
-	var err error
-	vals := make([]types.Value, len(ra)*2)
-	for i, tag := range tags {
-		vals[i*2] = types.Uint(tag)
-		vals[i*2+1], err = ra[tag].AsValue(nbf)
+	for _, tag := range buffs.tags {
+		buffs.rowVals = append(buffs.rowVals, types.Uint(tag))
+		cellVal, err := ra[tag].AsValue(nbf, buffs)
 
 		if err != nil {
 			return nil, err
 		}
+
+		buffs.rowVals = append(buffs.rowVals, cellVal)
 	}
 
-	return types.NewTuple(nbf, vals...)
+	t, err := types.NewTuple(nbf, buffs.rowVals...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	buffs.reset()
+	return t, nil
 }
 
 func rowAttFromValue(v types.Value) (rowAtt, error) {

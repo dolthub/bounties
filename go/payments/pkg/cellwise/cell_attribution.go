@@ -28,17 +28,23 @@ type cellAtt struct {
 	CurrentOwner int16
 }
 
-func (att *cellAtt) AsValue(nbf *types.NomsBinFormat) (types.Value, error) {
-	vals := make([]types.Value, 1, 1+(2*len(att.PastValues)))
-	vals[0] = types.Int(att.CurrentOwner)
+func (att *cellAtt) AsValue(nbf *types.NomsBinFormat, buffs *rowAttEncodingBuffers) (types.Value, error) {
+	buffs.cellVals = append(buffs.cellVals, types.Int(att.CurrentOwner))
 
 	for h, n := range att.PastValues {
 		hCopy := h
-		vals = append(vals, types.InlineBlob(hCopy[:]))
-		vals = append(vals, types.Int(n))
+		buffs.cellVals = append(buffs.cellVals, types.InlineBlob(hCopy[:]))
+		buffs.cellVals = append(buffs.cellVals, types.Int(n))
 	}
 
-	return types.NewTuple(nbf, vals...)
+	t, err := types.NewTuple(nbf, buffs.cellVals...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	buffs.cellVals = buffs.cellVals[:0]
+	return t, nil
 }
 
 func cellAttFromValue(v types.Value) (*cellAtt, error) {

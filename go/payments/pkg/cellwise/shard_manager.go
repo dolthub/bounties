@@ -21,6 +21,7 @@ type shardManager struct {
 	table         string
 	inputShard    AttributionShard
 	numCommits    int
+	rowAttBuff    *rowAttEncodingBuffers
 
 	startKey        types.Value
 	currStore       *valuefile.FileValueStore
@@ -38,6 +39,7 @@ func NewShardManager(nbf *types.NomsBinFormat, numCommits int, inputShard Attrib
 		table:         table,
 		inputShard:    inputShard,
 		numCommits:    numCommits,
+		rowAttBuff:    NewRowAttEncodingBuffers(),
 		shardBasePath: shardBasePath,
 		shardStore:    shardStore,
 		shardParams:   shardParams,
@@ -48,7 +50,7 @@ func (sm *shardManager) getShards() []AttributionShard {
 	return sm.shards
 }
 
-func (sm *shardManager) addRowAtt(ctx context.Context, key types.Value, ra rowAtt) error {
+func (sm *shardManager) addRowAtt(ctx context.Context, key types.Value, ra rowAtt, raVal types.Value) error {
 	// check and shard
 	if sm.rowsInCurrShard >= sm.shardParams.RowsPerShard {
 		err := sm.closeCurrentShard(ctx, key)
@@ -66,13 +68,16 @@ func (sm *shardManager) addRowAtt(ctx context.Context, key types.Value, ra rowAt
 		}
 	}
 
-	v, err := ra.AsValue(sm.nbf)
-	if err != nil {
-		return err
+	if raVal == nil {
+		var err error
+		raVal, err = ra.AsValue(sm.nbf, sm.rowAttBuff)
+		if err != nil {
+			return err
+		}
 	}
 
 	sm.streamMapCh <- key
-	sm.streamMapCh <- v
+	sm.streamMapCh <- raVal
 	sm.rowsInCurrShard++
 
 	for _, ca := range ra {
