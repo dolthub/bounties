@@ -3,7 +3,7 @@ module github.com/dolthub/bounties/go
 go 1.15
 
 require (
-	github.com/dolthub/dolt/go v0.0.0-20210218222642-33a73bd872a4
+	github.com/dolthub/dolt/go v0.0.0-20210310014450-111cbebec08d
 	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/golang/protobuf v1.4.2
 	github.com/pkg/profile v1.5.0
@@ -11,4 +11,3 @@ require (
 	google.golang.org/protobuf v1.25.0
 )
 
-replace github.com/dolthub/dolt/go => ../../dolt/go
