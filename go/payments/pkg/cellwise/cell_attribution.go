@@ -42,7 +42,6 @@ func (att *cellAtt) Update(nbf *types.NomsBinFormat, commitIdx int16, oldVal, ne
 	}
 
 	newHash, err := newVal.Hash(nbf)
-
 	if err != nil {
 		return 0, 0, err
 	}
@@ -50,7 +49,6 @@ func (att *cellAtt) Update(nbf *types.NomsBinFormat, commitIdx int16, oldVal, ne
 	var oldHash hash.Hash
 	if oldVal != nil {
 		oldHash, err = oldVal.Hash(nbf)
-
 		if err != nil {
 			return 0, 0, err
 		}
@@ -98,7 +96,6 @@ func (att *cellAtt) addPastValue(commitIdx int16, h hash.Hash) {
 // attribution
 func (att *cellAtt) Delete(nbf *types.NomsBinFormat, oldVal types.Value) error {
 	oldHash, err := oldVal.Hash(nbf)
-
 	if err != nil {
 		return err
 	}

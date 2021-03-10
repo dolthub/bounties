@@ -1,3 +1,17 @@
+// Copyright 2021 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package cellwise
 
 import (
@@ -14,15 +28,17 @@ import (
 )
 
 const (
-	initialTags          = 2048
-	maxPastValuesInitial = 1024
+	initialTags = 2048
 )
 
+// rowAttEncodingBuffers are buffers that allow encoding of rowAtt objects without having to allocate additional
+// data for each
 type rowAttEncodingBuffers struct {
 	tags    []uint64
 	rowVals []types.Value
 }
 
+// NewRowAttEncodingBuffers returns a nerw rowAttEncodingBuffers obj.ect
 func NewRowAttEncodingBuffers() *rowAttEncodingBuffers {
 	buffs := &rowAttEncodingBuffers{
 		tags:    make([]uint64, initialTags),
@@ -38,12 +54,15 @@ func (buffs *rowAttEncodingBuffers) reset() {
 	buffs.rowVals = buffs.rowVals[:0]
 }
 
+// rowAtt is the attribution object for a row.  It maps from tag to each cell's attribution
 type rowAtt map[uint64]*cellAtt
 
+// newRowAtt returns a new rowAtt object
 func newRowAtt() rowAtt {
 	return make(rowAtt)
 }
 
+// AsValue encodes a rowAtt objects as a noms value
 func (ra rowAtt) AsValue(nbf *types.NomsBinFormat, buffs *rowAttEncodingBuffers) (types.Value, error) {
 	for tag := range ra {
 		buffs.tags = append(buffs.tags, tag)
@@ -68,7 +87,6 @@ func (ra rowAtt) AsValue(nbf *types.NomsBinFormat, buffs *rowAttEncodingBuffers)
 	}
 
 	t, err := types.NewTuple(nbf, buffs.rowVals...)
-
 	if err != nil {
 		return nil, err
 	}
@@ -77,10 +95,10 @@ func (ra rowAtt) AsValue(nbf *types.NomsBinFormat, buffs *rowAttEncodingBuffers)
 	return t, nil
 }
 
+// rowAttFromValue decodes a rowAtt object from a noms value
 func rowAttFromValue(v types.Value) (rowAtt, error) {
 	t := v.(types.Tuple)
 	itr, err := t.Iterator()
-
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +125,6 @@ func rowAttFromValue(v types.Value) (rowAtt, error) {
 			pastVals = make(map[hash.Hash]int16, pastValCount)
 			for i := uint64(0); i < pastValCount; i++ {
 				_, hashBlobVal, err := itr.Next()
-
 				if err != nil {
 					return nil, err
 				}
@@ -116,7 +133,6 @@ func rowAttFromValue(v types.Value) (rowAtt, error) {
 				h := hash.New(hashBlob)
 
 				_, prevOwnerVal, err := itr.Next()
-
 				if err != nil {
 					return nil, err
 				}
@@ -134,15 +150,18 @@ func rowAttFromValue(v types.Value) (rowAtt, error) {
 	return ra, nil
 }
 
+// updateFromDiff updates attribution based on a change to the row
 func (ra rowAtt) updateFromDiff(nbf *types.NomsBinFormat, sch schema.Schema, commitIdx int16, difference *diff.Difference) error {
+	// gets a map from a tag to the new and old value of a cell
 	tvd, err := differs.NewTaggedValDiff(sch, difference)
-
 	if err != nil {
 		return err
 	}
 
+	// filter out things that haven't changed and iterate over the ones that have
 	tvd.FilterEqual()
 	err = tvd.IterDiffs(func(tag uint64, old, new types.Value) error {
+		// if new is nill then this is a cell that's been deleted.  update the cell att accordingly
 		if types.IsNull(new) {
 			att, ok := ra[tag]
 			if ok {
@@ -155,13 +174,15 @@ func (ra rowAtt) updateFromDiff(nbf *types.NomsBinFormat, sch schema.Schema, com
 				}
 			}
 		} else {
+			// has a new value for this cell
 			att, ok := ra[tag]
 
 			if !ok {
+				// no existing attribution. create new
 				ra[tag] = newCellAtt(commitIdx)
 			} else {
+				// Changed, update attribution appropriately
 				_, _, err := att.Update(nbf, commitIdx, old, new)
-
 				if err != nil {
 					return err
 				}
@@ -174,6 +195,7 @@ func (ra rowAtt) updateFromDiff(nbf *types.NomsBinFormat, sch schema.Schema, com
 	return err
 }
 
+// String returns a string which can be printed to aid debugging
 func (ra rowAtt) String() string {
 	tags := make([]uint64, 0, len(ra))
 	for tag := range ra {

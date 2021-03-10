@@ -138,7 +138,6 @@ func TestAttribution(t *testing.T) {
 			"31 rows per shard, min shard size 11",
 			CWAttShardParams{
 				RowsPerShard: 31,
-				MinShardSize: 11,
 			},
 		},
 	}

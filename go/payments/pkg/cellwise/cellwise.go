@@ -1,3 +1,17 @@
+// Copyright 2021 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package cellwise
 
 import (
@@ -19,13 +33,16 @@ import (
 	"github.com/dolthub/dolt/go/store/valuefile"
 )
 
+// CWAttShardParams control the dynamic sharding behavior
 type CWAttShardParams struct {
+	// RowsPerShard define the count at which point a shard is cut and a new one starts
 	RowsPerShard uint64
-	MinShardSize uint64
+	// MinShardSize uint64 need to implement
 }
 
 var _ att.Method = CWAttribution{}
 
+// CWAttribution implements att.Method and provides cellwise attribution
 type CWAttribution struct {
 	ddb         *doltdb.DoltDB
 	buildDir    string
@@ -34,6 +51,7 @@ type CWAttribution struct {
 	shardStore  att.ShardStore
 }
 
+// NewCWAtt returns a new CWAttribution object
 func NewCWAtt(ddb *doltdb.DoltDB, buildDir string, startHash hash.Hash, shardStore att.ShardStore, params CWAttShardParams) CWAttribution {
 	return CWAttribution{
 		ddb:         ddb,
@@ -44,29 +62,28 @@ func NewCWAtt(ddb *doltdb.DoltDB, buildDir string, startHash hash.Hash, shardSto
 	}
 }
 
+// EmptySummary returns an empty CellwiseAttSummary object
 func (cwa CWAttribution) EmptySummary(ctx context.Context) att.Summary {
 	return emptySummary(cwa.startHash)
 }
 
+// WriteSummary persists a summary
 func (cwa CWAttribution) WriteSummary(ctx context.Context, summary att.Summary) error {
 	cws := summary.(CellwiseAttSummary)
 	commitHash := cws.CommitHashes[cws.NumCommits()-1]
 	commitHashStr := commitHash.String()
 
 	store, err := valuefile.NewFileValueStore(cwa.ddb.Format())
-
 	if err != nil {
 		return err
 	}
 
 	v, err := marshal.Marshal(ctx, store, summary)
-
 	if err != nil {
 		return err
 	}
 
 	_, err = store.WriteValue(ctx, v)
-
 	if err != nil {
 		return err
 	}
@@ -75,18 +92,17 @@ func (cwa CWAttribution) WriteSummary(ctx context.Context, summary att.Summary) 
 	return cwa.shardStore.WriteShard(ctx, key, store, v)
 }
 
+// ReadSummary reads a summary for a commit hash
 func (cwa CWAttribution) ReadSummary(ctx context.Context, commitHash hash.Hash) (att.Summary, error) {
 	commitHashStr := commitHash.String()
 	key := cwa.shardStore.Join(cwa.startHash.String(), commitHashStr+".summary")
 	val, err := cwa.shardStore.ReadShard(ctx, key)
-
 	if err != nil {
 		return nil, err
 	}
 
 	var summary CellwiseAttSummary
 	err = marshal.Unmarshal(ctx, cwa.ddb.Format(), val, &summary)
-
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +124,7 @@ func (cwa CWAttribution) ReadSummary(ctx context.Context, commitHash hash.Hash) 
 	return summary, nil
 }
 
+// CollectShards gathers all the shards that need to be processed
 func (cwa CWAttribution) CollectShards(ctx context.Context, commit, prevCommit *doltdb.Commit, summary att.Summary) ([]att.ShardInfo, error) {
 	root, err := commit.GetRootValue()
 	if err != nil {
@@ -140,6 +157,8 @@ func (cwa CWAttribution) collectShards(ctx context.Context, summary CellwiseAttS
 	}
 
 	allShards := make([]att.ShardInfo, 0, len(tables)*16)
+
+	// loop over the tables and look at the shards from the previous summary
 	for _, table := range tables {
 		shards, ok := summary.TableShards[table]
 
@@ -148,11 +167,13 @@ func (cwa CWAttribution) collectShards(ctx context.Context, summary CellwiseAttS
 			continue
 		}
 
+		// gets a []bool which tells which shards have differences that need to be attributed, and which do not
 		hasDiffs, err := cwa.shardsHaveDiffs(ctx, shards, table, root, prevRoot)
 		if err != nil {
 			return nil, err
 		}
 
+		// append to allShards creating a special UnchangedShard object for shards that have not changed
 		for i := range shards {
 			if hasDiffs[i] {
 				allShards = append(allShards, shards[i])
@@ -165,6 +186,8 @@ func (cwa CWAttribution) collectShards(ctx context.Context, summary CellwiseAttS
 	return allShards, nil
 }
 
+// looks at whether the table has changed.  If it has changed, it then looks to see if their are diffs that touch the
+// corresponding shards
 func (cwa CWAttribution) shardsHaveDiffs(ctx context.Context, shards []AttributionShard, table string, root, prevRoot *doltdb.RootValue) ([]bool, error) {
 	var tblHash hash.Hash
 	var prevTblHash hash.Hash
@@ -213,6 +236,7 @@ func (cwa CWAttribution) shardsHaveDiffs(ctx context.Context, shards []Attributi
 	return hasDiffs, err
 }
 
+// gets the lists of tables that are scored.  This filters out any tables with the prefix dolt_
 func (cwa CWAttribution) getScoredTables(ctx context.Context, summary CellwiseAttSummary, root *doltdb.RootValue) ([]string, error) {
 	tableNames, err := root.GetTableNames(ctx)
 
@@ -236,7 +260,7 @@ func (cwa CWAttribution) getScoredTables(ctx context.Context, summary CellwiseAt
 	return scoredTables, nil
 }
 
-//func (cwa CWAttribution) processSingleShard(ctx context.Context, commitIdx int16, basePath string, shard AttributionShard, tbl, prevTbl *doltdb.Table) ([]AttributionShard, error)
+// ProcessShard processes a single shard
 func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *doltdb.Commit, shardInfo att.ShardInfo) (att.ShardResult, error) {
 	commitHash, err := cm.HashOf()
 	if err != nil {
@@ -323,6 +347,7 @@ func processUnchangedShard(ctx context.Context, shard AttributionShard) (att.Sha
 	}}, nil
 }
 
+// ProcessResults takes all the results from processing all the shards and returns a summary
 func (cwa CWAttribution) ProcessResults(ctx context.Context, commitHash hash.Hash, prevSummary att.Summary, results []att.ShardResult) (att.Summary, error) {
 	// nil summary not allowed.  pass emptySummary when there is no prev summary
 	ps := prevSummary.(CellwiseAttSummary)
@@ -367,6 +392,7 @@ func (cwa CWAttribution) readShardFile(ctx context.Context, shard AttributionSha
 	return attribData, nil
 }
 
+// getDiffer returns a differs.Differ implementation which encapsulates all the changes.
 func (cwa CWAttribution) getDiffer(ctx context.Context, shard AttributionShard, tbl, prevTbl *doltdb.Table) (schema.Schema, differs.Differ, error) {
 	if prevTbl == nil && tbl == nil {
 		panic("how")
@@ -422,10 +448,13 @@ func (cwa CWAttribution) getDiffer(ctx context.Context, shard AttributionShard, 
 	}
 }
 
+// attributeDiffs loops over the previous attribution and the diffs updating the attribution and sending it to the shard
+// manager to be persisted.
 func (cwa CWAttribution) attributeDiffs(ctx context.Context, commitIdx int16, shardMgr *shardManager, sch schema.Schema, attribData *types.Map, differ differs.Differ) error {
 	var attItr types.MapIterator
 	var err error
 
+	// get an iterator for iterating over the existing attribution for the shard.  If there is no attribution gets an empty iterator
 	if attribData != nil {
 		attItr, err = attribData.Iterator(ctx)
 
@@ -443,6 +472,7 @@ func (cwa CWAttribution) attributeDiffs(ctx context.Context, commitIdx int16, sh
 	var diffs []*diff2.Difference
 	for {
 		if attKey == nil {
+			// gets existing attribution data for the next previously attributed row
 			attKey, attVal, err = attItr.Next(ctx)
 
 			if err != nil && err != io.EOF {
@@ -451,6 +481,7 @@ func (cwa CWAttribution) attributeDiffs(ctx context.Context, commitIdx int16, sh
 		}
 
 		if diffs == nil {
+			// get diff data for the next row that has changed
 			diffs, _, err = differ.GetDiffs(1, -1)
 
 			if err != nil && err != io.EOF {
@@ -458,18 +489,20 @@ func (cwa CWAttribution) attributeDiffs(ctx context.Context, commitIdx int16, sh
 			}
 		}
 
+		// if there is no more attribution data, and no more diffs to be processed then exit
 		if attKey == nil && len(diffs) == 0 {
 			break
 		}
 
-		if attKey == nil {
+		if attKey == nil { // no existing attribution data.  This is a new row
 			err = cwa.processDiffWithNoPrevAtt(ctx, shardMgr, sch, commitIdx, diffs[0])
 			diffs = nil
-		} else if len(diffs) == 0 {
+		} else if len(diffs) == 0 { // have attribution data but no diff.  attribution should stay untouched
 			err = cwa.processUnchangedAttribution(ctx, shardMgr, attKey, attVal)
 			attKey = nil
 			attVal = nil
 		} else {
+			// have an existing attributed row, and a row that has changed
 			diffKey := diffs[0].KeyValue
 			isLess, err := attKey.Less(nbf, diffKey)
 
@@ -478,15 +511,18 @@ func (cwa CWAttribution) attributeDiffs(ctx context.Context, commitIdx int16, sh
 			}
 
 			if isLess {
+				// the attributed row comes before the changed row.  attribution stays untouched
 				err = cwa.processUnchangedAttribution(ctx, shardMgr, attKey, attVal)
 				attKey = nil
 				attVal = nil
 			} else if attKey.Equals(diffKey) {
+				// existing attributed row matches the row that has changed.  Update attribution
 				err = cwa.updateAttFromDiff(ctx, shardMgr, sch, commitIdx, attKey, attVal, diffs[0])
 				attKey = nil
 				attVal = nil
 				diffs = nil
 			} else {
+				// the changed row is less than the attributed row.  This row is new.  add new attribution
 				err = cwa.processDiffWithNoPrevAtt(ctx, shardMgr, sch, commitIdx, diffs[0])
 				diffs = nil
 			}

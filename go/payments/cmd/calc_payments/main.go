@@ -19,10 +19,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/pkg/profile"
 	"os"
 	"path/filepath"
 	"strconv"
+
+	"github.com/pkg/profile"
 
 	"github.com/dolthub/bounties/go/payments/pkg/att"
 	"github.com/dolthub/bounties/go/payments/pkg/cellwise"
@@ -107,19 +108,16 @@ func main() {
 	}
 
 	absPath, err := validateDirectory(*repoDir)
-
 	if err != nil {
 		errExit(err.Error())
 	}
 
 	err = os.Chdir(absPath)
-
 	if err != nil {
 		errExit(fmt.Sprintf("Could not change path to '%s'", *repoDir))
 	}
 
 	absBuildDir, err := validateDirectory(*buildDir)
-
 	if err != nil {
 		errExit(err.Error())
 	}
@@ -150,10 +148,9 @@ func main() {
 	case "cellwise":
 		shardParams := cellwise.CWAttShardParams{
 			RowsPerShard: 100_000,
-			MinShardSize: 10_000,
 		}
-		shardStore, err := att.NewFilesysShardStore(opts.buildDir)
 
+		shardStore, err := att.NewFilesysShardStore(opts.buildDir)
 		if err != nil {
 			errExit(fmt.Sprintf("Failed to create local shardstore using the directory '%s': %v", opts.buildDir, err))
 		}
@@ -164,7 +161,6 @@ func main() {
 	}
 
 	err = calcAttribution(ctx, method, dEnv.DoltDB, opts)
-
 	if err != nil {
 		errExit(fmt.Sprintf("Error occurred while running calculations: %v", err))
 	}
@@ -173,7 +169,6 @@ func main() {
 func calcAttribution(ctx context.Context, method att.Method, ddb *doltdb.DoltDB, opts options) error {
 	// mergeCommits will be ordered from most recent to least recent
 	mergeCommits, err := doltutils.GetMergeCommitsBetween(ctx, ddb, opts.startHash, opts.endHash)
-
 	if err != nil {
 		return err
 	}
@@ -184,7 +179,6 @@ func calcAttribution(ctx context.Context, method att.Method, ddb *doltdb.DoltDB,
 	}
 
 	i, summary, err := readLatestSummary(ctx, method, mergeCommits)
-
 	if err != nil {
 		return err
 	}
@@ -222,7 +216,6 @@ func calcAttribution(ctx context.Context, method att.Method, ddb *doltdb.DoltDB,
 		fmt.Println("Processing:", commitHash.String(), "parent:", prevCommitHash.String())
 
 		shardInfo, err := method.CollectShards(ctx, commit, prevCommit, summary)
-
 		if err != nil {
 			return err
 		}
@@ -230,7 +223,6 @@ func calcAttribution(ctx context.Context, method att.Method, ddb *doltdb.DoltDB,
 		var results []att.ShardResult
 		for _, shard := range shardInfo {
 			result, err := method.ProcessShard(ctx, int16(commitIdx), commit, prevCommit, shard)
-
 			if err != nil {
 				return err
 			}
@@ -239,13 +231,11 @@ func calcAttribution(ctx context.Context, method att.Method, ddb *doltdb.DoltDB,
 		}
 
 		summary, err = method.ProcessResults(ctx, commitHash, summary, results)
-
 		if err != nil {
 			return err
 		}
 
 		err = method.WriteSummary(ctx, summary)
-
 		if err != nil {
 			return err
 		}
@@ -261,13 +251,11 @@ func calcAttribution(ctx context.Context, method att.Method, ddb *doltdb.DoltDB,
 func readLatestSummary(ctx context.Context, method att.Method, mergeCommits []*doltdb.Commit) (int, att.Summary, error) {
 	for i, cm := range mergeCommits {
 		h, err := cm.HashOf()
-
 		if err != nil {
 			return 0, nil, err
 		}
 
 		summary, err := method.ReadSummary(ctx, h)
-
 		if err == att.ErrSummaryDoesntExist {
 			continue
 		} else if err != nil {
@@ -282,14 +270,12 @@ func readLatestSummary(ctx context.Context, method att.Method, mergeCommits []*d
 
 func printSummaryInfo(ctx context.Context, summary att.Summary, commits []*doltdb.Commit) {
 	commitToCount, err := summary.CommitToCount(ctx)
-
 	if err != nil {
 		panic(err)
 	}
 
 	for _, commit := range commits {
 		h, err := commit.HashOf()
-
 		if err != nil {
 			panic(err)
 		}
@@ -310,13 +296,11 @@ func validateDirectory(dir string) (string, error) {
 	}
 
 	absPath, err := filepath.Abs(dir)
-
 	if err != nil {
 		errExit(fmt.Sprintf("Invalid path '%s'", dir))
 	}
 
 	stat, err := os.Stat(absPath)
-
 	if err != nil {
 		return "", fmt.Errorf("Invalid repo dir '%s'", dir)
 	} else if !stat.IsDir() {
