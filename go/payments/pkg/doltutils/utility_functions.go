@@ -55,7 +55,7 @@ func GetRows(ctx context.Context, root *doltdb.RootValue, tableName string) (typ
 }
 
 // GetMergeCommitsAfter iterates through the commit graph backwards until it finds `afterHash`, only ever following a
-// a commits first parent. Each merge commit is appended to a slice which is ordered from newest commit to oldest commit
+// a commits first parent. The merge commits are returned in order from the oldest to the newest
 func GetMergeCommitsAfter(ctx context.Context, db *doltdb.DoltDB, current *doltdb.Commit, afterHash hash.Hash) ([]*doltdb.Commit, error) {
 	var mergeCommits []*doltdb.Commit
 
@@ -99,11 +99,15 @@ func GetMergeCommitsAfter(ctx context.Context, db *doltdb.DoltDB, current *doltd
 		}
 	}
 
+	for i, j := 0, len(mergeCommits)-1; i < j; i, j = i+1, j-1 {
+		mergeCommits[i], mergeCommits[j] = mergeCommits[j], mergeCommits[i]
+	}
+
 	return mergeCommits, nil
 }
 
-// GetMergeCommitsBetween walks the commit log and returns ordered merge commits where commit is after start, and
-// less than or equal to end.
+// GetMergeCommitsBetween walks the commit log and returns ordered merge commits from the commit after start, to
+// the commit equal to end.
 func GetMergeCommitsBetween(ctx context.Context, db *doltdb.DoltDB, start, end hash.Hash) ([]*doltdb.Commit, error) {
 	cs, err := doltdb.NewCommitSpec(end.String())
 

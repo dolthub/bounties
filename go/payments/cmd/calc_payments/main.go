@@ -16,12 +16,10 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/pkg/profile"
 
@@ -167,7 +165,7 @@ func main() {
 }
 
 func calcAttribution(ctx context.Context, method att.Method, ddb *doltdb.DoltDB, opts options) error {
-	// mergeCommits will be ordered from most recent to least recent
+	// mergeCommits will be ordered from least recent to most recent
 	mergeCommits, err := doltutils.GetMergeCommitsBetween(ctx, ddb, opts.startHash, opts.endHash)
 	if err != nil {
 		return err
@@ -178,28 +176,20 @@ func calcAttribution(ctx context.Context, method att.Method, ddb *doltdb.DoltDB,
 		defer stopProfFunc()
 	}
 
-	i, summary, err := readLatestSummary(ctx, method, mergeCommits)
+	prevCommitIdx, summary, err := readLatestSummary(ctx, method, mergeCommits)
 	if err != nil {
 		return err
 	}
 
 	var prevCommit *doltdb.Commit
-	prevCommitIdx := len(mergeCommits) - i - 1
 	if prevCommitIdx >= 0 {
-		prevCommit = mergeCommits[len(mergeCommits)-prevCommitIdx-1]
-	}
-
-	if summary == nil {
-		if prevCommitIdx >= 0 {
-			return errors.New("failed to read summary for latest commit")
-		}
-
+		prevCommit = mergeCommits[prevCommitIdx]
+	} else {
 		summary = method.EmptySummary(ctx)
 	}
 
-	for i--; i >= 0; i-- {
-		commitIdx := len(mergeCommits) - i - 1
-		commit := mergeCommits[i]
+	for commitIdx := prevCommitIdx + 1; commitIdx < len(mergeCommits); commitIdx++ {
+		commit := mergeCommits[commitIdx]
 		commitHash, err := commit.HashOf()
 		if err != nil {
 			return err
@@ -240,7 +230,7 @@ func calcAttribution(ctx context.Context, method att.Method, ddb *doltdb.DoltDB,
 			return err
 		}
 
-		printSummaryInfo(ctx, summary, mergeCommits[i:])
+		printSummaryInfo(ctx, summary, mergeCommits[:commitIdx+1])
 
 		prevCommit = commit
 	}
@@ -249,7 +239,8 @@ func calcAttribution(ctx context.Context, method att.Method, ddb *doltdb.DoltDB,
 }
 
 func readLatestSummary(ctx context.Context, method att.Method, mergeCommits []*doltdb.Commit) (int, att.Summary, error) {
-	for i, cm := range mergeCommits {
+	for i := len(mergeCommits) - 1; i >= 0; i-- {
+		cm := mergeCommits[i]
 		h, err := cm.HashOf()
 		if err != nil {
 			return 0, nil, err
@@ -265,7 +256,7 @@ func readLatestSummary(ctx context.Context, method att.Method, mergeCommits []*d
 		return i, summary, nil
 	}
 
-	return len(mergeCommits), nil, nil
+	return -1, nil, nil
 }
 
 func printSummaryInfo(ctx context.Context, summary att.Summary, commits []*doltdb.Commit) {
@@ -274,7 +265,7 @@ func printSummaryInfo(ctx context.Context, summary att.Summary, commits []*doltd
 		panic(err)
 	}
 
-	for _, commit := range commits {
+	for i, commit := range commits {
 		h, err := commit.HashOf()
 		if err != nil {
 			panic(err)
@@ -286,7 +277,7 @@ func printSummaryInfo(ctx context.Context, summary att.Summary, commits []*doltd
 			panic("failed to find count for " + h.String())
 		}
 
-		fmt.Println(h.String()+":", strconv.FormatUint(count, 10))
+		fmt.Printf("%02d. %s: %d\n", i, h.String(), count)
 	}
 }
 

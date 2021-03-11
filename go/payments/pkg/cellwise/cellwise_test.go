@@ -163,7 +163,7 @@ func TestAttribution(t *testing.T) {
 			var summary att.Summary = emptySummary(startOfBountyHash)
 			var prevCommit *doltdb.Commit
 			for i := 0; i < len(expected); i++ {
-				commit := commits[int16(len(commits)-(i+1))]
+				commit := commits[i]
 				require.NoError(t, err)
 
 				shards, err := cwAtt.CollectShards(ctx, commit, prevCommit, summary)
