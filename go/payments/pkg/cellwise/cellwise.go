@@ -40,9 +40,9 @@ type CWAttShardParams struct {
 	// MinShardSize uint64 need to implement
 }
 
-var _ att.Method = CWAttribution{}
+var _ att.AttributionMethod = CWAttribution{}
 
-// CWAttribution implements att.Method and provides cellwise attribution
+// CWAttribution implements att.AttributionMethod and provides cellwise attribution
 type CWAttribution struct {
 	ddb         *doltdb.DoltDB
 	buildDir    string

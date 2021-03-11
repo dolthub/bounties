@@ -69,13 +69,13 @@ func errExit(message string) {
 func main() {
 	ctx := context.Background()
 
-	methodStr := flag.String("method", "", "The method used to calculate payments.  Supported options: 'cellwise'")
-	repoDir := flag.String("repo-dir", "./", "Directory of the repository being examened")
+	methodStr := flag.String("method", "", "The method used to calculate payments.  Supported options: 'cellwise'.")
+	repoDir := flag.String("repo-dir", "./", "Directory of the repository.")
 	startHash := flag.String("start", "", "Commit hash representing the start of a bounty before any contributions are made.")
 	endHash := flag.String("end", "", "Last commit hash included in the payment calculation.")
-	buildDir := flag.String("build-dir", "", "directory where build files are output")
-	profileType := flag.String("profile", "", "options are (cpu,mem,blocking,trace)")
-	profileHashStr := flag.String("profile-hash", "", "commit hash to limit profiling to")
+	buildDir := flag.String("build-dir", "", "directory where build files are output.")
+	profileType := flag.String("profile", "", "options are (cpu,mem,blocking,trace).")
+	profileHashStr := flag.String("profile-hash", "", "commit hash to limit profiling to.")
 	flag.Parse()
 
 	if len(*methodStr) == 0 {
@@ -141,7 +141,7 @@ func main() {
 		errExit(fmt.Sprintf("Failed to load dolt repo state: %v", dEnv.RSLoadErr))
 	}
 
-	var method att.Method
+	var method att.AttributionMethod
 	switch *methodStr {
 	case "cellwise":
 		shardParams := cellwise.CWAttShardParams{
@@ -164,7 +164,7 @@ func main() {
 	}
 }
 
-func calcAttribution(ctx context.Context, method att.Method, ddb *doltdb.DoltDB, opts options) error {
+func calcAttribution(ctx context.Context, method att.AttributionMethod, ddb *doltdb.DoltDB, opts options) error {
 	// mergeCommits will be ordered from least recent to most recent
 	mergeCommits, err := doltutils.GetMergeCommitsBetween(ctx, ddb, opts.startHash, opts.endHash)
 	if err != nil {
@@ -238,7 +238,7 @@ func calcAttribution(ctx context.Context, method att.Method, ddb *doltdb.DoltDB,
 	return nil
 }
 
-func readLatestSummary(ctx context.Context, method att.Method, mergeCommits []*doltdb.Commit) (int, att.Summary, error) {
+func readLatestSummary(ctx context.Context, method att.AttributionMethod, mergeCommits []*doltdb.Commit) (int, att.Summary, error) {
 	for i := len(mergeCommits) - 1; i >= 0; i-- {
 		cm := mergeCommits[i]
 		h, err := cm.HashOf()

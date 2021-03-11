@@ -37,8 +37,8 @@ type ShardInfo interface{}
 // ShardResult is an interface which contains the result of processing a shard of data
 type ShardResult interface{}
 
-// Method is an interface for attributing changes to commits
-type Method interface {
+// AttributionMethod is an interface for attributing changes to commits
+type AttributionMethod interface {
 	// EmptySummary returns an empty summary for the given method type
 	EmptySummary(ctx context.Context) Summary
 
