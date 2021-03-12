@@ -1,3 +1,17 @@
+// Copyright 2021 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package doltutils
 
 import (
@@ -9,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+// GetRows gets a tables row data and schema from a rootValue and table name
 func GetRows(ctx context.Context, root *doltdb.RootValue, tableName string) (types.Map, schema.Schema, error) {
 	tbl, ok, err := root.GetTable(ctx, tableName)
 
@@ -40,7 +55,7 @@ func GetRows(ctx context.Context, root *doltdb.RootValue, tableName string) (typ
 }
 
 // GetMergeCommitsAfter iterates through the commit graph backwards until it finds `afterHash`, only ever following a
-// a commits first parent. Each merge commit is appended to a slice which is ordered from newest commit to oldest commit
+// a commits first parent. The merge commits are returned in order from the oldest to the newest
 func GetMergeCommitsAfter(ctx context.Context, db *doltdb.DoltDB, current *doltdb.Commit, afterHash hash.Hash) ([]*doltdb.Commit, error) {
 	var mergeCommits []*doltdb.Commit
 
@@ -84,9 +99,15 @@ func GetMergeCommitsAfter(ctx context.Context, db *doltdb.DoltDB, current *doltd
 		}
 	}
 
+	for i, j := 0, len(mergeCommits)-1; i < j; i, j = i+1, j-1 {
+		mergeCommits[i], mergeCommits[j] = mergeCommits[j], mergeCommits[i]
+	}
+
 	return mergeCommits, nil
 }
 
+// GetMergeCommitsBetween walks the commit log and returns ordered merge commits from the commit after start, to
+// the commit equal to end.
 func GetMergeCommitsBetween(ctx context.Context, db *doltdb.DoltDB, start, end hash.Hash) ([]*doltdb.Commit, error) {
 	cs, err := doltdb.NewCommitSpec(end.String())
 
