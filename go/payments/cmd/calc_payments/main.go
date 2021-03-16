@@ -185,6 +185,15 @@ func calcAttribution(ctx context.Context, method att.AttributionMethod, ddb *dol
 	if prevCommitIdx >= 0 {
 		prevCommit = mergeCommits[prevCommitIdx]
 	} else {
+		cs, err := doltdb.NewCommitSpec(opts.startHash.String())
+		if err != nil {
+			return err
+		}
+		prevCommit, err = ddb.Resolve(ctx, cs, nil)
+		if err != nil {
+			return err
+		}
+
 		summary = method.EmptySummary(ctx)
 	}
 
