@@ -155,7 +155,7 @@ func TestAttribution(t *testing.T) {
 
 			commits, err := doltutils.GetMergeCommitsAfter(ctx, dEnv.DoltDB, cm, startOfBountyHash)
 			require.NoError(t, err)
-			shardStore, err := att.NewFilesysShardStore(buildDir)
+			shardStore, err := att.NewFilesysShardStore(filepath.Join(buildDir, startOfBountyHash.String()))
 			require.NoError(t, err)
 			cwAtt := NewCWAtt(dEnv.DoltDB, startOfBountyHash, shardStore, test.shardParams)
 			require.Equal(t, len(expected), len(commits))
