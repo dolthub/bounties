@@ -16,12 +16,42 @@ package cellwise
 
 import (
 	"context"
+	"errors"
+	"github.com/dolthub/dolt/go/store/marshal"
+	"github.com/dolthub/dolt/go/store/valuefile"
+	"io"
+	"reflect"
 
 	"github.com/dolthub/bounties/go/payments/pkg/att"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
+
+func deserializeShard(ctx context.Context, nbf *types.NomsBinFormat, rd io.Reader) (AttributionShard, error) {
+	vals, err := valuefile.ReadFromReader(ctx, rd)
+	if err != nil {
+		return AttributionShard{}, err
+	} else if len(vals) != 1 {
+		return AttributionShard{}, errors.New("corrupt shard info")
+	}
+
+	var shard AttributionShard
+	err = marshal.Unmarshal(ctx, nbf, vals[0], &shard)
+	if err != nil {
+		return AttributionShard{}, err
+	}
+
+	if _, ok := shard.StartInclusive.(types.Tuple); !ok {
+		shard.StartInclusive = types.NullValue
+	}
+
+	if _, ok := shard.EndExclusive.(types.Tuple); !ok {
+		shard.EndExclusive = types.NullValue
+	}
+
+	return shard, nil
+}
 
 // AttributionShard is the ShardInfo object used by cellwise attribution to track a shard of.
 type AttributionShard struct {
@@ -50,6 +80,55 @@ func (as AttributionShard) inRangeFunc(nbf *types.NomsBinFormat) func(v types.Va
 	return func(value types.Value) (bool, error) {
 		return value.Less(nbf, as.EndExclusive)
 	}
+}
+
+func (as AttributionShard) Equals(other interface{}) bool {
+	otherShard, ok := other.(AttributionShard)
+
+	if ok {
+		return as.StartInclusive.Equals(otherShard.StartInclusive) &&
+			as.EndExclusive.Equals(otherShard.EndExclusive) &&
+			as.Table == otherShard.Table &&
+			as.Path == otherShard.Path &&
+			reflect.DeepEqual(as.CommitCounts, otherShard.CommitCounts)
+	}
+
+	return false
+}
+
+// Key returns a string based on the table, start and end values for the shard the format being table-<start-hash>_<end-hasd>.
+// if the start or end keys are nil "" will be used in their place.  A shard named "table-_" will be the full range of values,
+// "table-b03dtu0alc0piqlu8s5q7dibmt4kdn8_" would be a shard staring from the key that has hash b03dtu0alc0piqlu8s5q7dibmt4kdn8
+// and all the rows that follow. "table-_b03dtu0alc0piqlu8s5q7dibmt4kdn8" would we all keys coming before the key with hash
+// b03dtu0alc0piqlu8s5q7dibmt4kdn8.  "table-24pvcimjhuolbnr801nn1q8bq1f91u9j_s72v43bh8kiopalsldg1okgh96gpberv" would be all values
+// between the keys with hashes 24pvcimjhuolbnr801nn1q8bq1f91u9j and s72v43bh8kiopalsldg1okgh96gpberv. The key is unique within a
+// commit
+func (as AttributionShard) Key(nbf *types.NomsBinFormat) string {
+	return as.Table + "-" + hashValToString(as.StartInclusive, nbf) + "_" + hashValToString(as.EndExclusive, nbf)
+}
+
+func (as AttributionShard) serialize(ctx context.Context, nbf *types.NomsBinFormat, wr io.Writer) error {
+	store, err := valuefile.NewFileValueStore(nbf)
+	if err != nil {
+		return err
+	}
+
+	v, err := marshal.Marshal(ctx, store, as)
+	if err != nil {
+		return err
+	}
+
+	_, err = store.WriteValue(ctx, v)
+	if err != nil {
+		return err
+	}
+
+	err = valuefile.WriteToWriter(ctx, wr, store, v)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // UnchangedShard is used to mark shards which have not changed since they were last processed

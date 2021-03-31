@@ -20,6 +20,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // ErrSummaryDoesntExist is the error returned when trying to read a summary for a given key that doesn't exist
@@ -32,7 +33,9 @@ type Summary interface {
 }
 
 // ShardInfo is an interface which contains data necessary for processing a single shard of data
-type ShardInfo interface{}
+type ShardInfo interface {
+	Key(*types.NomsBinFormat) string
+}
 
 // ShardResult is an interface which contains the result of processing a shard of data
 type ShardResult interface{}
@@ -43,7 +46,7 @@ type AttributionMethod interface {
 	EmptySummary(ctx context.Context) Summary
 
 	// ReadSummary reads a summary for a commit hash
-	ReadSummary(ctx context.Context, commitHash hash.Hash) (Summary, error)
+	ReadSummary(ctx context.Context, key string) (Summary, error)
 
 	// CollectShards gathers all the shards that need to be processed
 	CollectShards(ctx context.Context, commit, prevCommit *doltdb.Commit, summary Summary) ([]ShardInfo, error)
@@ -55,5 +58,17 @@ type AttributionMethod interface {
 	ProcessResults(ctx context.Context, commitHash hash.Hash, prevSummary Summary, results []ShardResult) (Summary, error)
 
 	// WriteSummary persists a summary
-	WriteSummary(ctx context.Context, summary Summary) error
+	WriteSummary(ctx context.Context, summary Summary) (string, error)
+
+	// SerializeShardInfo takes a ShardInfo object and serializes it
+	SerializeShardInfo(ctx context.Context, info ShardInfo) ([]byte, error)
+
+	// DeserializeShardInfo takes a []byte and deserializes it to a ShardInfo object
+	DeserializeShardInfo(ctx context.Context, data []byte) (ShardInfo, error)
+
+	// SerializeResults takes a ShardResult object and serializes it
+	SerializeResults(ctx context.Context, results ShardResult) ([]byte, error)
+
+	// DeserializeResults takes a []bite and deserializes it ta a ShardResult
+	DeserializeResults(ctx context.Context, data []byte) (ShardResult, error)
 }

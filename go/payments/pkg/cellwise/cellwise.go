@@ -15,7 +15,9 @@
 package cellwise
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"io"
 	"strings"
 
@@ -45,17 +47,15 @@ var _ att.AttributionMethod = CWAttribution{}
 // CWAttribution implements att.AttributionMethod and provides cellwise attribution
 type CWAttribution struct {
 	ddb         *doltdb.DoltDB
-	buildDir    string
 	startHash   hash.Hash
 	shardParams CWAttShardParams
 	shardStore  att.ShardStore
 }
 
 // NewCWAtt returns a new CWAttribution object
-func NewCWAtt(ddb *doltdb.DoltDB, buildDir string, startHash hash.Hash, shardStore att.ShardStore, params CWAttShardParams) CWAttribution {
+func NewCWAtt(ddb *doltdb.DoltDB, startHash hash.Hash, shardStore att.ShardStore, params CWAttShardParams) CWAttribution {
 	return CWAttribution{
 		ddb:         ddb,
-		buildDir:    buildDir,
 		startHash:   startHash,
 		shardStore:  shardStore,
 		shardParams: params,
@@ -67,35 +67,148 @@ func (cwa CWAttribution) EmptySummary(ctx context.Context) att.Summary {
 	return emptySummary(cwa.startHash)
 }
 
+// SerializeResults takes a ShardResult object and serializes it
+func (cwa CWAttribution) SerializeResults(ctx context.Context, results att.ShardResult) ([]byte, error) {
+	attShards, ok := results.([]AttributionShard)
+	if !ok {
+		return nil, errors.New("unexpected result type")
+	}
+
+	store, err := valuefile.NewFileValueStore(cwa.ddb.Format())
+	if err != nil {
+		return nil, err
+	}
+
+	val, err := marshal.Marshal(ctx, store, attShards)
+	if err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	err = valuefile.WriteToWriter(ctx, &buf, store, val)
+	if err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+// DeserializeResults takes a []bite and deserializes it ta a ShardResult
+func (cwa CWAttribution) DeserializeResults(ctx context.Context, data []byte) (att.ShardResult, error) {
+	buf := bytes.NewBuffer(data)
+	vals, err := valuefile.ReadFromReader(ctx, buf)
+	if err != nil {
+		return AttributionShard{}, err
+	} else if len(vals) != 1 {
+		return AttributionShard{}, errors.New("corrupt shard info")
+	}
+
+	var results []AttributionShard
+	err = marshal.Unmarshal(ctx, cwa.ddb.Format(), vals[0], &results)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range results {
+		if _, ok := results[i].StartInclusive.(types.Tuple); !ok {
+			results[i].StartInclusive = types.NullValue
+		}
+
+		if _, ok := results[i].EndExclusive.(types.Tuple); !ok {
+			results[i].EndExclusive = types.NullValue
+		}
+	}
+
+	return results, nil
+}
+
+// SerializeShardInfo takes a ShardInfo object and serializes it
+func (cwa CWAttribution) SerializeShardInfo(ctx context.Context, info att.ShardInfo) ([]byte, error) {
+	var buf bytes.Buffer
+
+	unchanged, ok := info.(UnchangedShard)
+
+	if ok {
+		buf.WriteByte(0)
+		err := unchanged.serialize(ctx, cwa.ddb.Format(), &buf)
+		if err != nil {
+			return nil, err
+		}
+
+		return buf.Bytes(), nil
+	}
+
+	cellwiseShard, ok := info.(AttributionShard)
+
+	if ok {
+		buf.WriteByte(1)
+		err := cellwiseShard.serialize(ctx, cwa.ddb.Format(), &buf)
+		if err != nil {
+			return nil, err
+		}
+
+		return buf.Bytes(), nil
+	}
+
+	return nil, errors.New("Unsupported shard type for cellwise attribution")
+}
+
+// DeserializeShardInfo takes a []byte and deserializes it to a ShardInfo object
+func (cwa CWAttribution) DeserializeShardInfo(ctx context.Context, data []byte) (att.ShardInfo, error) {
+	buf := bytes.NewBuffer(data)
+	shardType, err := buf.ReadByte()
+	if err != nil {
+		return nil, err
+	}
+
+	if shardType < 0 || shardType > 1 {
+		return nil, errors.New("corrupt shard info")
+	}
+
+	shardInfo, err := deserializeShard(ctx, cwa.ddb.Format(), buf)
+	if err != nil {
+		return nil, err
+	}
+
+	if shardType == 0 {
+		return UnchangedShard{AttributionShard: shardInfo}, nil
+	} else {
+		return shardInfo, nil
+	}
+}
+
 // WriteSummary persists a summary
-func (cwa CWAttribution) WriteSummary(ctx context.Context, summary att.Summary) error {
+func (cwa CWAttribution) WriteSummary(ctx context.Context, summary att.Summary) (string, error) {
 	cws := summary.(CellwiseAttSummary)
 	commitHash := cws.CommitHashes[cws.NumCommits()-1]
 	commitHashStr := commitHash.String()
 
 	store, err := valuefile.NewFileValueStore(cwa.ddb.Format())
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	v, err := marshal.Marshal(ctx, store, summary)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	_, err = store.WriteValue(ctx, v)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	key := cwa.shardStore.Join(cwa.startHash.String(), commitHashStr+".summary")
-	return cwa.shardStore.WriteShard(ctx, key, store, v)
+	key := commitHashStr + ".summary"
+	err = cwa.shardStore.WriteShard(ctx, key, store, v)
+	if err != nil {
+		return "", err
+	}
+
+	return key, err
 }
 
 // ReadSummary reads a summary for a commit hash
-func (cwa CWAttribution) ReadSummary(ctx context.Context, commitHash hash.Hash) (att.Summary, error) {
-	commitHashStr := commitHash.String()
-	key := cwa.shardStore.Join(cwa.startHash.String(), commitHashStr+".summary")
+func (cwa CWAttribution) ReadSummary(ctx context.Context, key string) (att.Summary, error) {
 	val, err := cwa.shardStore.ReadShard(ctx, key)
 	if err != nil {
 		return nil, err
@@ -280,8 +393,6 @@ func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, 
 		}
 	}
 
-	basePath := cwa.shardStore.Join(cwa.startHash.String(), commitHash.String())
-
 	if unchangedShard, ok := shardInfo.(UnchangedShard); ok {
 		return processUnchangedShard(ctx, unchangedShard.AttributionShard)
 	}
@@ -303,7 +414,6 @@ func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, 
 	}
 
 	nbf := cwa.ddb.Format()
-	tableShardPath := cwa.shardStore.Join(basePath, tableName)
 
 	sch, differ, err := cwa.getDiffer(ctx, shard, tbl, prevTbl)
 	if err != nil {
@@ -319,7 +429,8 @@ func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, 
 		attribData = &ad
 	}
 
-	shardMgr := NewShardManager(nbf, int(commitIdx)+1, shard, shard.Table, tableShardPath, cwa.shardParams, cwa.shardStore)
+	basePath := commitHash.String()
+	shardMgr := NewShardManager(nbf, int(commitIdx)+1, shard, shard.Table, basePath, cwa.shardParams, cwa.shardStore)
 	err = cwa.attributeDiffs(ctx, commitIdx, shardMgr, sch, attribData, differ)
 	if err != nil && err != io.EOF {
 		return nil, err

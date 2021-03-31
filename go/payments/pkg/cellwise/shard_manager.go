@@ -17,8 +17,6 @@ package cellwise
 import (
 	"context"
 	"errors"
-	"strings"
-
 	"github.com/dolthub/bounties/go/payments/pkg/att"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -142,22 +140,23 @@ func (sm *shardManager) closeCurrentShard(ctx context.Context, end types.Value) 
 			end = end.(types.Tuple).CopyOf(nil)
 		}
 
+		shard := AttributionShard{
+			Table:          sm.table,
+			StartInclusive: startKey,
+			EndExclusive:   end,
+			CommitCounts:   sm.commitCounts,
+		}
+
 		// persist to shard store
-		path := sm.shardStore.Join(sm.shardBasePath, shardName(sm.nbf, startKey, end))
+		path := sm.shardStore.Join(sm.shardBasePath, shard.Key(sm.nbf))
 		err = sm.shardStore.WriteShard(ctx, path, sm.currStore, m)
 		if err != nil {
 			return err
 		}
+		shard.Path = path
 
 		// resulting metadata on the output shard
-		sm.shards = append(sm.shards, AttributionShard{
-			Table:          sm.table,
-			StartInclusive: startKey,
-			EndExclusive:   end,
-			Path:           path,
-			CommitCounts:   sm.commitCounts,
-		})
-
+		sm.shards = append(sm.shards, shard)
 		sm.startKey = nil
 		sm.currStore = nil
 		sm.rowsInCurrShard = 0
@@ -188,16 +187,6 @@ func (sm *shardManager) openNewShard(ctx context.Context, startKey types.Value) 
 	sm.commitCounts = make([]uint64, sm.numCommits)
 
 	return nil
-}
-
-// shardName returns a string based on the start and end values for the shard the format being <start-hash>_<end-hasd>.
-// if the start or end keys are nil "" will be used in their place.  A shard named "_" will be the full range of values,
-// "b03dtu0alc0piqlu8s5q7dibmt4kdn8_" would be a shard staring from the key that has hash b03dtu0alc0piqlu8s5q7dibmt4kdn8
-// and all the rows that follow. "_b03dtu0alc0piqlu8s5q7dibmt4kdn8" would we all keys coming before the key with hash
-// b03dtu0alc0piqlu8s5q7dibmt4kdn8.  "24pvcimjhuolbnr801nn1q8bq1f91u9j_s72v43bh8kiopalsldg1okgh96gpberv" would be all values
-// between the keys with hashes 24pvcimjhuolbnr801nn1q8bq1f91u9j and s72v43bh8kiopalsldg1okgh96gpberv.
-func shardName(nbf *types.NomsBinFormat, startInclusive, endExclusive types.Value) string {
-	return strings.Join([]string{hashValToString(startInclusive, nbf), hashValToString(endExclusive, nbf)}, "_")
 }
 
 func hashValToString(v types.Value, nbf *types.NomsBinFormat) string {

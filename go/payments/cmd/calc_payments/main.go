@@ -148,12 +148,12 @@ func main() {
 			RowsPerShard: 100_000,
 		}
 
-		shardStore, err := att.NewFilesysShardStore(opts.buildDir)
+		shardStore, err := att.NewFilesysShardStore(filepath.Join(opts.buildDir, opts.startHash.String()))
 		if err != nil {
 			errExit(fmt.Sprintf("Failed to create local shardstore using the directory '%s': %v", opts.buildDir, err))
 		}
 
-		method = cellwise.NewCWAtt(dEnv.DoltDB, opts.buildDir, opts.startHash, shardStore, shardParams)
+		method = cellwise.NewCWAtt(dEnv.DoltDB, opts.startHash, shardStore, shardParams)
 	default:
 		errExit(fmt.Sprintf("Unknown --method '%s'", *methodStr))
 	}
@@ -234,7 +234,7 @@ func calcAttribution(ctx context.Context, method att.AttributionMethod, ddb *dol
 			return err
 		}
 
-		err = method.WriteSummary(ctx, summary)
+		_, err = method.WriteSummary(ctx, summary)
 		if err != nil {
 			return err
 		}
@@ -255,7 +255,7 @@ func readLatestSummary(ctx context.Context, method att.AttributionMethod, mergeC
 			return 0, nil, err
 		}
 
-		summary, err := method.ReadSummary(ctx, h)
+		summary, err := method.ReadSummary(ctx, h.String()+".summary")
 		if err == att.ErrSummaryDoesntExist {
 			continue
 		} else if err != nil {
