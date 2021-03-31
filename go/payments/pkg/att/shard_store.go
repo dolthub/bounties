@@ -55,7 +55,7 @@ func NewFilesysShardStore(rootDir string) (*FilesysShardStore, error) {
 
 // WriteShard presists shard data stored in noms.valuefile format
 func (f *FilesysShardStore) WriteShard(ctx context.Context, key string, store *valuefile.FileValueStore, shardVal types.Value) error {
-	absPath := f.Join(key)
+	absPath := filepath.Join(f.rootDir, key)
 
 	dir := filepath.Dir(absPath)
 	err := os.MkdirAll(dir, os.ModePerm)
@@ -68,7 +68,7 @@ func (f *FilesysShardStore) WriteShard(ctx context.Context, key string, store *v
 
 // ReadShard reads shard data
 func (f *FilesysShardStore) ReadShard(ctx context.Context, key string) (types.Value, error) {
-	absPath := f.Join(key)
+	absPath := filepath.Join(f.rootDir, key)
 
 	vals, err := valuefile.ReadValueFile(ctx, absPath)
 	if os.IsNotExist(err) {
@@ -83,11 +83,5 @@ func (f *FilesysShardStore) ReadShard(ctx context.Context, key string) (types.Va
 // Join joins key elements into a single key with delimiters that are appropriate for the backing storage.  In this case
 // it uses the filesys appropriate file separator.
 func (f *FilesysShardStore) Join(keyElements ...string) string {
-	path := filepath.Join(keyElements...)
-
-	if !filepath.IsAbs(path) {
-		return filepath.Join(f.rootDir, path)
-	}
-
-	return path
+	return filepath.Join(keyElements...)
 }

@@ -153,7 +153,7 @@ func main() {
 			errExit(fmt.Sprintf("Failed to create local shardstore using the directory '%s': %v", opts.buildDir, err))
 		}
 
-		method = cellwise.NewCWAtt(dEnv.DoltDB, opts.buildDir, opts.startHash, shardStore, shardParams)
+		method = cellwise.NewCWAtt(dEnv.DoltDB, opts.startHash, shardStore, shardParams)
 	default:
 		errExit(fmt.Sprintf("Unknown --method '%s'", *methodStr))
 	}

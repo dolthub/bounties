@@ -157,7 +157,7 @@ func TestAttribution(t *testing.T) {
 			require.NoError(t, err)
 			shardStore, err := att.NewFilesysShardStore(buildDir)
 			require.NoError(t, err)
-			cwAtt := NewCWAtt(dEnv.DoltDB, startOfBountyHash.String(), startOfBountyHash, shardStore, test.shardParams)
+			cwAtt := NewCWAtt(dEnv.DoltDB, startOfBountyHash, shardStore, test.shardParams)
 			require.Equal(t, len(expected), len(commits))
 
 			var summary att.Summary = emptySummary(startOfBountyHash)
@@ -169,12 +169,42 @@ func TestAttribution(t *testing.T) {
 				shards, err := cwAtt.CollectShards(ctx, commit, prevCommit, summary)
 				require.NoError(t, err)
 
+				for j := range shards {
+					serialized, err := cwAtt.SerializeShardInfo(ctx, shards[j])
+					require.NoError(t, err)
+					deserialized, err := cwAtt.DeserializeShardInfo(ctx, serialized)
+					require.NoError(t, err)
+
+					unchanged, unchangedOK := shards[j].(UnchangedShard)
+
+					if unchangedOK {
+						deserializedUnchanged, ok := deserialized.(UnchangedShard)
+						require.True(t, ok)
+						require.True(t, unchanged.AttributionShard.Equals(deserializedUnchanged.AttributionShard))
+					} else {
+						require.True(t, shards[j].(AttributionShard).Equals(deserialized))
+					}
+				}
+
 				var results []att.ShardResult
 				for _, shard := range shards {
 					result, err := cwAtt.ProcessShard(ctx, int16(i), commit, prevCommit, shard)
 					require.NoError(t, err)
 
 					results = append(results, result)
+				}
+
+				for j := range results {
+					serialized, err := cwAtt.SerializeResults(ctx, results[j])
+					require.NoError(t, err)
+					deserialized, err := cwAtt.DeserializeResults(ctx, serialized)
+					require.NoError(t, err)
+
+					resShards := results[j].([]AttributionShard)
+					deserResults := deserialized.([]AttributionShard)
+					for k := 0; k < len(resShards); k++ {
+						require.True(t, resShards[k].Equals(deserResults[k]))
+					}
 				}
 
 				commitHash, err := commit.HashOf()
@@ -186,11 +216,9 @@ func TestAttribution(t *testing.T) {
 				expectedAtt := expected[i]
 				assertOnExpectedAttribution(t, expectedAtt, summary.(CellwiseAttSummary))
 
-				h, err := commit.HashOf()
+				summaryKey, err := cwAtt.WriteSummary(ctx, summary)
 				require.NoError(t, err)
-				err = cwAtt.WriteSummary(ctx, summary)
-				require.NoError(t, err)
-				summary, err = cwAtt.ReadSummary(ctx, h)
+				summary, err = cwAtt.ReadSummary(ctx, summaryKey)
 				require.NoError(t, err)
 
 				prevCommit = commit
