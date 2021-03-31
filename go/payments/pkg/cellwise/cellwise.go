@@ -414,7 +414,6 @@ func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, 
 	}
 
 	nbf := cwa.ddb.Format()
-	tableShardPath := cwa.shardStore.Join(commitHash.String(), tableName)
 
 	sch, differ, err := cwa.getDiffer(ctx, shard, tbl, prevTbl)
 	if err != nil {
@@ -430,7 +429,8 @@ func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, 
 		attribData = &ad
 	}
 
-	shardMgr := NewShardManager(nbf, int(commitIdx)+1, shard, shard.Table, tableShardPath, cwa.shardParams, cwa.shardStore)
+	basePath := commitHash.String()
+	shardMgr := NewShardManager(nbf, int(commitIdx)+1, shard, shard.Table, basePath, cwa.shardParams, cwa.shardStore)
 	err = cwa.attributeDiffs(ctx, commitIdx, shardMgr, sch, attribData, differ)
 	if err != nil && err != io.EOF {
 		return nil, err
