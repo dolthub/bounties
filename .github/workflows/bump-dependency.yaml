@@ -82,10 +82,9 @@ jobs:
       - name: Get Assignee and Reviewer
         id: get_reviewer
         run: |
-          echo "This is the assignee ${{ github.event.client_payload.assignee }}"
           if [ "${{ github.event.client_payload.assignee }}" == "bheni" ]
           then
-            echo "::set-output name=reviewer::coffeegoddd"
+            echo "::set-output name=reviewer::reltuk"
           else
             echo "::set-output name=reviewer::bheni"
           fi
