@@ -1,0 +1,129 @@
+name: Bump Dolt
+
+on:
+  repository_dispatch:
+    types: [ bump-dolt ]
+
+jobs:
+  stale-dolt-bump-prs:
+    name: Retrieving Stale Dolt Bump PRs
+    outputs:
+      stale-pulls: ${{ steps.get-stale-prs.outputs.open-pulls }}
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Get Open Dolt Bump PRs
+        id: get-stale-prs
+        uses: actions/github-script@v4
+        with:
+          debug: true
+          github-token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          script: |
+            try {
+              const { owner, repo } = context.repo;
+              const res = await github.pulls.list({
+                owner,
+                repo,
+                state: 'open',
+                sort: 'created',
+                direction: 'desc',
+              });
+
+              const { data } = res;
+              const filtered = data.filter(p => {
+                if (p.labels.length < 1) return false;
+                for (const label of p.labels) {
+                  if (label.name === 'dolt-bump') return true;
+                }
+                return false;
+              });
+
+              console.log(filtered);
+              core.setOutput("open-pulls", JSON.stringify(filtered));
+              process.exit(0);
+            } catch(err) {
+              console.log("Error:", err);
+              process.exit(1);
+            }
+
+  open-dolt-bump-pr:
+    needs: stale-dolt-bump-prs
+    name: Open Dolt Bump PR
+    runs-on: ubuntu-18.04
+    outputs:
+      latest-pr: ${{ steps.latest-pr.outputs.pr_url }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Bump dolt
+        working-directory: go
+        run: go get -u github.com/dolthub/dolt/go@${{ github.event.client_payload.head_commit_sha }}
+      - name: Update repos
+        run: ./bazel/gazelle-update-repos.sh
+      - name: Get Assignee and Reviewer
+        id: get_reviewer
+        run: |
+          if [ "${{ github.event.client_payload.assignee }}" == "bheni" ]
+          then
+            echo "::set-output name=reviewer::coffeegoddd"
+          else
+            echo "::set-output name=reviewer::bheni"
+          fi
+      - name: Get short hash
+        id: short-sha
+        run: |
+          commit=${{ github.event.client_payload.head_commit_sha }}
+          short=${commit:0:8}
+          echo "::set-output name=short::$short"
+      - name: Create and Push new branch
+        run: |
+          git config --global --add user.name "${{ github.event.client_payload.assignee }}"
+          git config --global --add user.email "${{ github.event.client_payload.assignee_email }}"
+          branchname=${{ format('{0}-{1}', github.event.client_payload.assignee, steps.short-sha.outputs.short) }}
+          git checkout -b "$branchname"
+          git add .
+          git commit -m "${{ format('[ga-bump-dolt] Bump Dolt in Bounties by {0}', github.event.client_payload.assignee) }}"
+          git push origin "$branchname"
+      - name: pull-request
+        uses: repo-sync/pull-request@v2
+        id: latest-pr
+        with:
+          source_branch: ${{ format('{0}-{1}', github.event.client_payload.assignee, steps.short-sha.outputs.short ) }}
+          destination_branch: "master"
+          github_token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          pr_title: "Bump Dolt by ${{ github.event.client_payload.assignee }}"
+          pr_template: ".github/markdown-templates/dolt-bump.md"
+          pr_reviewer: ${{ steps.get_reviewer.outputs.reviewer }}
+          pr_assignee: ${{ github.event.client_payload.assignee }}
+          pr_label: "dolt-bump"
+
+  comment-on-stale-prs:
+    needs: [open-dolt-bump-pr, stale-dolt-bump-prs]
+    runs-on: ubuntu-18.04
+    strategy:
+      matrix:
+        pull: ${{ fromJson(needs.stale-dolt-bump-prs.outputs.stale-pulls) }}
+    steps:
+      - name: Comment on Stale PRs
+        id: get-stale-prs
+        uses: actions/github-script@v4
+        env:
+          PULL: ${{ matrix.pull }}
+          SUPERSEDED_BY: ${{ needs.open-dolt-bump-pr.outputs.latest-pr }}
+        with:
+          debug: true
+          github-token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          script: |
+            try {
+              const { owner, repo } = context.repo;
+              const { PULL, SUPERSEDED_BY } = process.env;
+              const pull = JSON.parse(PULL);
+              await github.issues.createComment({
+                issue_number: pull.number,
+                owner,
+                repo,
+                body: `This PR has been superseded by ${SUPERSEDED_BY}`
+              });
+              process.exit(0);
+            } catch(err) {
+              console.log("Error:", err);
+              process.exit(1);
+            }
