@@ -1,12 +1,12 @@
-:coffee: *An Automated Dolt Version Bump PR* :crown:
+:coffee: *An Automated Dependency Version Bump PR* :crown:
 
 ### Initial Changes
 
-The initial changes contained in this PR were produced by `go get`ing the lastest `dolt`.
+The initial changes contained in this PR were produced by `go get`ing the dependency.
 
 ```
 $ cd ./go
-$ go get -u github.com/dolthub/dolt/go@<commit>
+$ go get -u github.com/dolthub/<dependency>/go@<commit>
 ```
 
 ### Before Merging
