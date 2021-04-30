@@ -38,7 +38,7 @@ jobs:
               });
 
               console.log(filtered);
-              core.setOutput("open-pulls", JSON.stringify(filtered));
+              if (filtered.length > 0) core.setOutput("open-pulls", JSON.stringify(filtered));
               process.exit(0);
             } catch(err) {
               console.log("Error:", err);
@@ -95,6 +95,7 @@ jobs:
 
   comment-on-stale-prs:
     needs: [open-dolt-bump-pr, stale-dolt-bump-prs]
+    if: ${{ needs.stale-dolt-bump-prs.outputs.stale-pulls != '' }}
     runs-on: ubuntu-18.04
     strategy:
       matrix:
