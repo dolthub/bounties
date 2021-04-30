@@ -56,8 +56,6 @@ jobs:
       - name: Bump dolt
         working-directory: go
         run: go get -u github.com/dolthub/dolt/go@${{ github.event.client_payload.head_commit_sha }}
-      - name: Update repos
-        run: ./bazel/gazelle-update-repos.sh
       - name: Get Assignee and Reviewer
         id: get_reviewer
         run: |
@@ -106,7 +104,7 @@ jobs:
         id: get-stale-prs
         uses: actions/github-script@v4
         env:
-          PULL: ${{ matrix.pull }}
+          PULL: ${{ toJson(matrix.pull) }}
           SUPERSEDED_BY: ${{ needs.open-dolt-bump-pr.outputs.latest-pr }}
         with:
           debug: true
