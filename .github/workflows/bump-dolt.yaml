@@ -115,12 +115,45 @@ jobs:
               const { owner, repo } = context.repo;
               const { PULL, SUPERSEDED_BY } = process.env;
               const pull = JSON.parse(PULL);
-              await github.issues.createComment({
-                issue_number: pull.number,
-                owner,
-                repo,
-                body: `This PR has been superseded by ${SUPERSEDED_BY}`
-              });
+
+              const ref = pull.head.sha;
+              if (ref !== '') {
+                const res = await github.checks.listForRef({
+                  owner,
+                  repo,
+                  ref,
+                  filter: 'latest',
+                  status: 'completed',
+                });
+
+                if (res.data && res.data.check_runs.length > 0) {
+                  let testCount = 0;
+                  for (const run of res.data.check_runs) {
+                    if (run.name === 'Go tests') {
+                      testCount += 1;
+                      if (run.conclusion !== 'success') {
+                        console.log(`Stale PR ${pull.number} has go tests that have not yet succeeded, keeping it open.`);
+                        process.exit(0);
+                      }
+                    }
+                  }
+                  if (testCount > 0) {
+                    await github.issues.createComment({
+                      issue_number: pull.number,
+                      owner,
+                      repo,
+                      body: `This PR has been superseded by ${SUPERSEDED_BY}`
+                    });
+                    await github.pulls.update({
+                      owner,
+                      repo,
+                      pull_number: pull.number,
+                      state: 'closed',
+                    });
+                  }
+                }
+              }
+
               process.exit(0);
             } catch(err) {
               console.log("Error:", err);
