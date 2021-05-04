@@ -110,7 +110,7 @@ jobs:
           source_branch: ${{ format('{0}-{1}', github.event.client_payload.assignee, steps.short-sha.outputs.short ) }}
           destination_branch: "master"
           github_token: ${{ secrets.REPO_ACCESS_TOKEN }}
-          pr_title: "Bump Dependency by ${{ github.event.client_payload.assignee }}"
+          pr_title: "[auto-bump] dependency by ${{ github.event.client_payload.assignee }}"
           pr_template: ".github/markdown-templates/dep-bump.md"
           pr_reviewer: ${{ steps.get_reviewer.outputs.reviewer }}
           pr_assignee: ${{ github.event.client_payload.assignee }}
@@ -139,28 +139,8 @@ jobs:
               const { PULL, SUPERSEDED_BY } = process.env;
               const pull = JSON.parse(PULL);
 
-              const ref = pull.head.sha;
-              if (ref !== '') {
-                const res = await github.checks.listForRef({
-                  owner,
-                  repo,
-                  ref,
-                  filter: 'latest',
-                  status: 'completed',
-                });
-
-                if (res.data && res.data.check_runs.length > 0) {
-                  let testCount = 0;
-                  for (const run of res.data.check_runs) {
-                    if (run.name === 'Go tests') {
-                      testCount += 1;
-                      if (run.conclusion !== 'success') {
-                        console.log(`Stale PR ${pull.number} has go tests that have not yet succeeded, keeping it open.`);
-                        process.exit(0);
-                      }
-                    }
-                  }
-                  if (testCount > 0) {
+              for (const label of pull.labels) {
+                 if (label.name === "autoclose-ok") {
                     await github.issues.createComment({
                       issue_number: pull.number,
                       owner,
@@ -173,8 +153,8 @@ jobs:
                       pull_number: pull.number,
                       state: 'closed',
                     });
-                  }
-                }
+                    break;
+                 }
               }
 
               process.exit(0);
