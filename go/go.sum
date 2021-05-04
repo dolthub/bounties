@@ -151,6 +151,8 @@ github.com/dolthub/dolt/go v0.0.0-20210426171708-0d430110af02 h1:hvv1tyDL45oCjlG
 github.com/dolthub/dolt/go v0.0.0-20210426171708-0d430110af02/go.mod h1:b6qi0pQErJMlbKRNtcM1moCZV5ze0jAtryXkrD6P6ks=
 github.com/dolthub/dolt/go v0.0.0-20210428210335-1a196c35aa45 h1:pk135tTevgG8HpfJwa7rK6wl27q4gqVC49RO5b3eQdU=
 github.com/dolthub/dolt/go v0.0.0-20210428210335-1a196c35aa45/go.mod h1:Penp0XXgJF5U3otxikwkn2lg19McPqFWjWrohqMJbvI=
+github.com/dolthub/dolt/go v0.0.0-20210504000412-695afa39af7f h1:WZW1l2cIWEklIR/r5Z9JqkgaLvPNhJFjjkOqQDYos9w=
+github.com/dolthub/dolt/go v0.0.0-20210504000412-695afa39af7f/go.mod h1:JeK5/iMxq2H9CmPvvadTSTHzNBd2MRrfBI0MFyfLjiQ=
 github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078 h1:nrkoh/RcgTq5EsWTcbSBF8KQghCtM+1dhyslghbBoj8=
 github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078/go.mod h1:8Jdiq6CVg8HM4n9fF17sGgXUpFa98zDyscW0A7OQmuM=
 github.com/dolthub/fslock v0.0.2 h1:8vUh47iKovgrtXNrXVIzsIoWLlspoXg+3nslhUzgKSw=
@@ -168,6 +170,7 @@ github.com/dolthub/go-mysql-server v0.9.1-0.20210426145315-bebcfb88b23c h1:W+B7k
 github.com/dolthub/go-mysql-server v0.9.1-0.20210426145315-bebcfb88b23c/go.mod h1:lKviZJ3QgD8TB9NrGWR080mHRQya+w+YHlme2JF4y5U=
 github.com/dolthub/go-mysql-server v0.9.1-0.20210428172146-87a95a1dc3bf h1:+LCmTo9xZvBltnYBIxdCATO/0gf0/9463NJ0h9WWpQw=
 github.com/dolthub/go-mysql-server v0.9.1-0.20210428172146-87a95a1dc3bf/go.mod h1:raUDli6MJt8QRP7LrXXJqnPrPA0Cjnt4Y/R/HVMGHGw=
+github.com/dolthub/go-mysql-server v0.9.1-0.20210430112822-dc45456dbd23/go.mod h1:raUDli6MJt8QRP7LrXXJqnPrPA0Cjnt4Y/R/HVMGHGw=
 github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446 h1:0ol5pj+QlKUKAtqs1LiPM3ZJKs+rHPgLSsMXmhTrCAM=
 github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446/go.mod h1:dhGBqcCEfK5kuFmeO5+WOx3hqc1k3M29c1oS/R7N4ms=
 github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66 h1:WRPDbpJWEnPxPmiuOTndT+lUWUeGjx6eoNOK9O4tQQQ=
