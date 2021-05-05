@@ -16,6 +16,8 @@ This PR must have passing CI and a review before merging.
 Please ensure the`go` tests all pass successfully. If they do not, please implement the fixes
 and re-run CI `go` tests until they do.
 
+If this PR has passing CI, a `check-suite-ok` label will automatically be applied to it.
+
 ### After Merging
 
 An automatic PR will be opened against the LD repo that bumps the bounties version there.
