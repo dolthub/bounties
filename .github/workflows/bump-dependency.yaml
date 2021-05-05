@@ -101,7 +101,7 @@ jobs:
           branchname=${{ format('{0}-{1}', github.event.client_payload.assignee, steps.short-sha.outputs.short) }}
           git checkout -b "$branchname"
           git add .
-          git commit -m "${{ format('[ga-bump-dep] Bump dependency in LD by {0}', github.event.client_payload.assignee) }}"
+          git commit -m "${{ format('[ga-bump-dep] Bump dependency in Bounties by {0}', github.event.client_payload.assignee) }}"
           git push origin "$branchname"
       - name: pull-request
         uses: repo-sync/pull-request@v2
