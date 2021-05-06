@@ -6,17 +6,12 @@ The initial changes contained in this PR were produced by `go get`ing the depend
 
 ```
 $ cd ./go
-$ go get -u github.com/dolthub/<dependency>/go@<commit>
+$ go get github.com/dolthub/<dependency>/go@<commit>
 ```
 
 ### Before Merging
 
 This PR must have passing CI and a review before merging.
-
-Please ensure the`go` tests all pass successfully. If they do not, please implement the fixes
-and re-run CI `go` tests until they do.
-
-If this PR has passing CI, a `check-suite-ok` label will automatically be applied to it.
 
 ### After Merging
 
