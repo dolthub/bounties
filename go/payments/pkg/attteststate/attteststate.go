@@ -316,7 +316,7 @@ func GenTestCommitGraph(ctx context.Context, ddb *doltdb.DoltDB, meta [NumCommit
 		return hash.Hash{}, nil, err
 	}
 
-	initialCommit, err := ddb.ResolveRef(ctx, ref.NewBranchRef("master"))
+	initialCommit, err := ddb.ResolveCommitRef(ctx, ref.NewBranchRef("master"))
 
 	if err != nil {
 		return hash.Hash{}, nil, err
