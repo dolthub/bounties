@@ -97,14 +97,15 @@ jobs:
       - name: Bump dependency
         working-directory: go
         run: go get github.com/dolthub/${{ github.event.client_payload.dependency }}/go@${{ github.event.client_payload.head_commit_sha }}
-      - name: Get Assignee and Reviewer
-        id: get_reviewer
+      - name: Get Assignee
+        id: get_assignee
         run: |
-          if [ "${{ github.event.client_payload.assignee }}" == "bheni" ]
+          if [ "${{ github.event.client_payload.assignee }}" == "github-actions[bot]" ]
           then
-            echo "::set-output name=reviewer::reltuk"
+            echo "::set-output name=assignee::coffeegoddd"
           else
-            echo "::set-output name=reviewer::bheni"
+            assignee="${{ github.event.client_payload.assignee }}"
+            echo "::set-output name=assignee::$assignee"
           fi
       - name: Get short hash
         id: short-sha
@@ -114,24 +115,23 @@ jobs:
           echo "::set-output name=short::$short"
       - name: Create and Push new branch
         run: |
-          git config --global --add user.name "${{ github.event.client_payload.assignee }}"
+          git config --global --add user.name "${{ steps.get_assignee.outputs.assignee }}"
           git config --global --add user.email "${{ github.event.client_payload.assignee_email }}"
-          branchname=${{ format('{0}-{1}', github.event.client_payload.assignee, steps.short-sha.outputs.short) }}
+          branchname=${{ format('{0}-{1}', steps.get_assignee.outputs.assignee, steps.short-sha.outputs.short) }}
           git checkout -b "$branchname"
           git add .
-          git commit -m "${{ format('[ga-bump-dep] Bump dependency in Bounties by {0}', github.event.client_payload.assignee) }}"
+          git commit -m "${{ format('[ga-bump-dep] Bump dependency in Bounties by {0}', steps.get_assignee.outputs.assignee) }}"
           git push origin "$branchname"
       - name: pull-request
         uses: repo-sync/pull-request@v2
         id: latest-pr
         with:
-          source_branch: ${{ format('{0}-{1}', github.event.client_payload.assignee, steps.short-sha.outputs.short ) }}
+          source_branch: ${{ format('{0}-{1}', steps.get_assignee.outputs.assignee, steps.short-sha.outputs.short ) }}
           destination_branch: "master"
           github_token: ${{ secrets.REPO_ACCESS_TOKEN }}
-          pr_title: "[auto-bump] dependency by ${{ github.event.client_payload.assignee }}"
+          pr_title: "[auto-bump] dependency by ${{ steps.get_assignee.outputs.assignee }}"
           pr_template: ".github/markdown-templates/dep-bump.md"
-          pr_reviewer: ${{ steps.get_reviewer.outputs.reviewer }}
-          pr_assignee: ${{ github.event.client_payload.assignee }}
+          pr_assignee: ${{ steps.get_assignee.outputs.assignee }}
           pr_label: ${{ needs.get-label.outputs.label }}
 
   comment-on-stale-prs:
