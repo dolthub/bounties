@@ -235,6 +235,8 @@ github.com/dolthub/dolt/go v0.0.0-20210630185433-c5bb166a46ce h1:y6iINLaA0RrvP+x
 github.com/dolthub/dolt/go v0.0.0-20210630185433-c5bb166a46ce/go.mod h1:ib60ytvKs5E78DKVIeSmhWxpwx8Gb9rQQ6wCmBNEIyY=
 github.com/dolthub/dolt/go v0.0.0-20210701234530-276b85b7b128 h1:QvOKiZvYx/l+652oTP4aPFbo7UJtV3VX/r81YC/co80=
 github.com/dolthub/dolt/go v0.0.0-20210701234530-276b85b7b128/go.mod h1:ib60ytvKs5E78DKVIeSmhWxpwx8Gb9rQQ6wCmBNEIyY=
+github.com/dolthub/dolt/go v0.0.0-20210703001738-f014039b69f3 h1:7TzX0GtbQPduvDQZ7MCcsW4XRGtA62r7IILlpbCy330=
+github.com/dolthub/dolt/go v0.0.0-20210703001738-f014039b69f3/go.mod h1:ib60ytvKs5E78DKVIeSmhWxpwx8Gb9rQQ6wCmBNEIyY=
 github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078 h1:nrkoh/RcgTq5EsWTcbSBF8KQghCtM+1dhyslghbBoj8=
 github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078/go.mod h1:8Jdiq6CVg8HM4n9fF17sGgXUpFa98zDyscW0A7OQmuM=
 github.com/dolthub/fslock v0.0.2 h1:8vUh47iKovgrtXNrXVIzsIoWLlspoXg+3nslhUzgKSw=
