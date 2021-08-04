@@ -38,7 +38,7 @@ import (
 // CWAttShardParams control the dynamic sharding behavior
 type CWAttShardParams struct {
 	// RowsPerShard define the count at which point a shard is cut and a new one starts
-	RowsPerShard uint64
+	RowsPerShard int
 	// MinShardSize uint64 need to implement
 }
 

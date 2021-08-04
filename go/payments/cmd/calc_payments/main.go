@@ -18,10 +18,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/pkg/profile"
 	"os"
 	"path/filepath"
-
-	"github.com/pkg/profile"
+	"time"
 
 	"github.com/dolthub/bounties/go/payments/pkg/att"
 	"github.com/dolthub/bounties/go/payments/pkg/cellwise"
@@ -197,7 +197,10 @@ func calcAttribution(ctx context.Context, method att.AttributionMethod, ddb *dol
 		summary = method.EmptySummary(ctx)
 	}
 
+	fmt.Println("Processing", len(mergeCommits), "merge commits.")
 	for commitIdx := prevCommitIdx + 1; commitIdx < len(mergeCommits); commitIdx++ {
+		start := time.Now()
+
 		commit := mergeCommits[commitIdx]
 		commitHash, err := commit.HashOf()
 		if err != nil {
@@ -239,7 +242,7 @@ func calcAttribution(ctx context.Context, method att.AttributionMethod, ddb *dol
 			return err
 		}
 
-		printSummaryInfo(ctx, summary, mergeCommits[:commitIdx+1])
+		printSummaryInfo(ctx, summary, mergeCommits[:commitIdx+1], time.Since(start))
 
 		prevCommit = commit
 	}
@@ -268,7 +271,7 @@ func readLatestSummary(ctx context.Context, method att.AttributionMethod, mergeC
 	return -1, nil, nil
 }
 
-func printSummaryInfo(ctx context.Context, summary att.Summary, commits []*doltdb.Commit) {
+func printSummaryInfo(ctx context.Context, summary att.Summary, commits []*doltdb.Commit, elapsed time.Duration) {
 	commitToCount, err := summary.CommitToCount(ctx)
 	if err != nil {
 		panic(err)
@@ -288,6 +291,8 @@ func printSummaryInfo(ctx context.Context, summary att.Summary, commits []*doltd
 
 		fmt.Printf("%02d. %s: %d\n", i, h.String(), count)
 	}
+
+	fmt.Printf("Built it %d ms\n", elapsed.Milliseconds())
 }
 
 func validateDirectory(dir string) (string, error) {
@@ -302,7 +307,7 @@ func validateDirectory(dir string) (string, error) {
 
 	stat, err := os.Stat(absPath)
 	if err != nil {
-		return "", fmt.Errorf("Invalid repo dir '%s'", dir)
+		return "", fmt.Errorf("Invalid dir '%s'", dir)
 	} else if !stat.IsDir() {
 		return "", fmt.Errorf("'%s' is a file.  Not a directory initialized as a valid dolt repo.", dir)
 	}

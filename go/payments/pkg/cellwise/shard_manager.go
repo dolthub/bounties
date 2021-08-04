@@ -23,6 +23,66 @@ import (
 	"github.com/dolthub/dolt/go/store/valuefile"
 )
 
+type addRowParams struct {
+	key   types.Value
+	raVal types.Value
+	ra    rowAtt
+}
+
+type attQueue struct {
+	attVals []addRowParams
+	head    int
+	tail    int
+	size    int
+	maxSize int
+}
+
+func newAttQueue(maxSize int) *attQueue {
+	return &attQueue{make([]addRowParams, maxSize), 0, 0, 0, maxSize}
+}
+
+func (q *attQueue) Size() int {
+	return q.size
+}
+
+func (q *attQueue) Full() bool {
+	return q.size == q.maxSize
+}
+
+func (q *attQueue) Empty() bool {
+	return q.size == 0
+}
+
+func (q *attQueue) Push(key, val types.Value, ra rowAtt) {
+	if q.Full() {
+		panic("full")
+	}
+
+	q.attVals[q.head] = addRowParams{key: key, raVal: val, ra: ra}
+	q.head = (q.head + 1) % q.maxSize
+	q.size++
+}
+
+func (q *attQueue) Pop() *addRowParams {
+	if q.Empty() {
+		return nil
+	}
+
+	arp := q.attVals[q.tail]
+	q.tail = (q.tail + 1) % q.maxSize
+	q.size--
+
+	return &arp
+}
+
+func (q *attQueue) PeekKey() types.Value {
+	if q.Empty() {
+		return nil
+	}
+
+	return q.attVals[q.tail].key
+}
+
 // shardManager manages writing of output shards
 type shardManager struct {
 	nbf           *types.NomsBinFormat
@@ -34,12 +94,13 @@ type shardManager struct {
 	numCommits    int
 	rowAttBuff    *rowAttEncodingBuffers
 
-	startKey        types.Value
-	currStore       *valuefile.FileValueStore
-	rowsInCurrShard uint64
-	streamMapCh     chan types.Value
-	outMap          *types.StreamingMap
-	commitCounts    []uint64
+	startKey      types.Value
+	currStore     *valuefile.FileValueStore
+	rowsBufferred int
+	aQ            *attQueue
+	streamMapCh   chan types.Value
+	outMap        *types.StreamingMap
+	commitCounts  []uint64
 
 	shards []AttributionShard
 }
@@ -56,6 +117,7 @@ func NewShardManager(nbf *types.NomsBinFormat, numCommits int, inputShard Attrib
 		shardBasePath: shardBasePath,
 		shardStore:    shardStore,
 		shardParams:   shardParams,
+		aQ:            newAttQueue(shardParams.RowsPerShard),
 	}
 }
 
@@ -66,22 +128,6 @@ func (sm *shardManager) getShards() []AttributionShard {
 
 // add an attributed row to the current shard being built
 func (sm *shardManager) addRowAtt(ctx context.Context, key types.Value, ra rowAtt, raVal types.Value) error {
-	// check and shard if beyond the configured number of rows per shard
-	if sm.rowsInCurrShard >= sm.shardParams.RowsPerShard {
-		err := sm.closeCurrentShard(ctx, key)
-		if err != nil {
-			return err
-		}
-	}
-
-	// open a new shard if not actively writing a shard
-	if sm.currStore == nil {
-		err := sm.openNewShard(ctx, key)
-		if err != nil {
-			return err
-		}
-	}
-
 	// if necessary encode the row attribution data as a noms value
 	if raVal == nil {
 		var err error
@@ -91,28 +137,76 @@ func (sm *shardManager) addRowAtt(ctx context.Context, key types.Value, ra rowAt
 		}
 	}
 
-	// stream in key and value (keys are sorted, and streamMapCh must receive key, value, key, value in interleaved manner)
-	sm.streamMapCh <- key
-	sm.streamMapCh <- raVal
-	sm.rowsInCurrShard++
+	sm.aQ.Push(key, raVal, ra)
+	nextKey := sm.aQ.PeekKey()
 
-	for _, ca := range ra {
-		if ca.CurrentOwner != -1 {
-			sm.commitCounts[ca.CurrentOwner]++
+	// check and shard if beyond the configured number of rows per shard
+	if sm.rowsBufferred >= sm.shardParams.RowsPerShard {
+		err := sm.closeCurrentShard(ctx, nextKey)
+		if err != nil {
+			return err
 		}
 	}
+
+	// open a new shard if not actively writing a shard
+	if sm.currStore == nil {
+		err := sm.openNewShard(ctx, nextKey)
+		if err != nil {
+			return err
+		}
+	}
+
+	toMove := (sm.aQ.Size() - sm.rowsBufferred + 1) / 2
+	sm.popQueuedRowsToShard(toMove)
 
 	return nil
 }
 
+func (sm *shardManager) popQueuedRowsToShard(toMove int) {
+	for i := 0; i < toMove; i++ {
+		arp := sm.aQ.Pop()
+		sm.streamMapCh <- arp.key
+		sm.streamMapCh <- arp.raVal
+
+		for _, ca := range arp.ra {
+			if ca.CurrentOwner != -1 {
+				sm.commitCounts[ca.CurrentOwner]++
+			}
+		}
+	}
+
+	sm.rowsBufferred += toMove
+}
+
 // called when all attribution is done for the input shard
 func (sm *shardManager) close(ctx context.Context) error {
+	remaining := sm.aQ.Size() + sm.rowsBufferred
+
+	// If the total number of rows between the buffered shard and the queue is greater than the shard cut off then cut the
+	// shard now and open a new one which we stream all the queued rows to before closing.  This gives two shards with an
+	// equal row count.
+	//
+	// If what remains is less than the cutoff just stream the queue into the current shard and close it out.
+	if remaining > sm.shardParams.RowsPerShard {
+		nextKey := sm.aQ.PeekKey()
+		err := sm.closeCurrentShard(ctx, nextKey)
+		if err != nil {
+			return err
+		}
+
+		err = sm.openNewShard(ctx, nextKey)
+		if err != nil {
+			return err
+		}
+	}
+
+	sm.popQueuedRowsToShard(sm.aQ.Size())
 	return sm.closeCurrentShard(ctx, sm.inputShard.EndExclusive)
 }
 
 // finalizes an output shard and persists it.
 func (sm *shardManager) closeCurrentShard(ctx context.Context, end types.Value) error {
-	if sm.rowsInCurrShard > 0 {
+	if sm.rowsBufferred > 0 {
 		// close the streaming map and get the types.Map which we will persist
 		close(sm.streamMapCh)
 		m, err := sm.outMap.Wait()
@@ -159,7 +253,7 @@ func (sm *shardManager) closeCurrentShard(ctx context.Context, end types.Value) 
 		sm.shards = append(sm.shards, shard)
 		sm.startKey = nil
 		sm.currStore = nil
-		sm.rowsInCurrShard = 0
+		sm.rowsBufferred = 0
 		sm.streamMapCh = nil
 		sm.outMap = nil
 		sm.commitCounts = nil
@@ -171,7 +265,7 @@ func (sm *shardManager) closeCurrentShard(ctx context.Context, end types.Value) 
 // create a new chunk store and streaming map in order to be able to stream row attribution values to the map containing
 // sharded attribution ddata
 func (sm *shardManager) openNewShard(ctx context.Context, startKey types.Value) error {
-	if sm.rowsInCurrShard != 0 {
+	if sm.rowsBufferred != 0 {
 		return errors.New("opening new shard while previous shard not closed")
 	}
 
