@@ -141,7 +141,7 @@ func (sm *shardManager) addRowAtt(ctx context.Context, key types.Value, ra rowAt
 	nextKey := sm.aQ.PeekKey()
 
 	// check and shard if beyond the configured number of rows per shard
-	if sm.rowsBufferred == sm.shardParams.RowsPerShard {
+	if sm.rowsBufferred >= sm.shardParams.RowsPerShard {
 		err := sm.closeCurrentShard(ctx, nextKey)
 		if err != nil {
 			return err
