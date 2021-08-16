@@ -3,7 +3,7 @@ module github.com/dolthub/bounties/go
 go 1.15
 
 require (
-	github.com/dolthub/dolt/go v0.0.0-20210806234550-839d685a628e
+	github.com/dolthub/dolt/go v0.0.0-20210814000042-1cdba2722427
 	github.com/pkg/profile v1.5.0
 	github.com/stretchr/testify v1.7.0
 )
