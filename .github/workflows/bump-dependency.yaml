@@ -96,7 +96,9 @@ jobs:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
       - name: Bump dependency
         working-directory: go
-        run: go get github.com/dolthub/${{ github.event.client_payload.dependency }}/go@${{ github.event.client_payload.head_commit_sha }}
+        run: |
+          go get github.com/dolthub/${{ github.event.client_payload.dependency }}/go@${{ github.event.client_payload.head_commit_sha }}
+          go mod tidy
       - name: Get Assignee
         id: get_assignee
         run: |
