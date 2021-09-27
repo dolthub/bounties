@@ -300,7 +300,7 @@ func createCommit(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValu
 		return nil, nil, err
 	}
 
-	cm, err := ddb.CommitWithParentCommits(ctx, h, ref.NewBranchRef("master"), parents, meta)
+	cm, err := ddb.CommitWithParentCommits(ctx, h, ref.NewBranchRef("main"), parents, meta)
 
 	if err != nil {
 		return nil, nil, err
@@ -316,7 +316,7 @@ func GenTestCommitGraph(ctx context.Context, ddb *doltdb.DoltDB, meta [NumCommit
 		return hash.Hash{}, nil, err
 	}
 
-	initialCommit, err := ddb.ResolveCommitRef(ctx, ref.NewBranchRef("master"))
+	initialCommit, err := ddb.ResolveCommitRef(ctx, ref.NewBranchRef("main"))
 
 	if err != nil {
 		return hash.Hash{}, nil, err

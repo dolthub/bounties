@@ -54,7 +54,7 @@ func getTestEnv(ctx context.Context, t *testing.T) *env.DoltEnv {
 	require.NoError(t, dEnv.CfgLoadErr)
 	require.Error(t, dEnv.RSLoadErr)
 
-	err := dEnv.InitDBAndRepoState(ctx, types.Format_Default, testUsername, testEmail, time.Now())
+	err := dEnv.InitDBAndRepoState(ctx, types.Format_Default, testUsername, testEmail, "main", time.Now())
 	require.NoError(t, err)
 
 	return dEnv
