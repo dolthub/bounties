@@ -129,7 +129,7 @@ jobs:
         id: latest-pr
         with:
           source_branch: ${{ format('{0}-{1}', steps.get_assignee.outputs.assignee, steps.short-sha.outputs.short ) }}
-          destination_branch: "master"
+          destination_branch: "main"
           github_token: ${{ secrets.REPO_ACCESS_TOKEN }}
           pr_title: "[auto-bump] dependency by ${{ steps.get_assignee.outputs.assignee }}"
           pr_template: ".github/markdown-templates/dep-bump.md"
