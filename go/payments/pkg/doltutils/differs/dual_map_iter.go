@@ -78,9 +78,7 @@ func (itr *DualMapIter) Start(ctx context.Context, from, to types.Map, start typ
 		Start:     startTuple,
 		Inclusive: true,
 		Reverse:   false,
-		Check: func(tuple types.Tuple) (bool, error) {
-			return inRange(tuple)
-		},
+		Check:     inRangeWrapper(inRange),
 	}
 
 	fromReader := noms.NewNomsRangeReader(nil, from, []*noms.ReadRange{readRange})
@@ -175,4 +173,15 @@ func (itr *DualMapIter) getDiff() (*diff.Difference, error) {
 			return kvDiff(nil, toKV)
 		}
 	}
+}
+
+// inRangeWrapper wraps an "inRange" function so that it may be used with the interface change on noms.ReadRange.
+type inRangeWrapper func(types.Value) (bool, error)
+
+var _ noms.InRangeCheck = inRangeWrapper(nil)
+
+// Check implements the interface noms.InRangeCheck.
+func (i inRangeWrapper) Check(ctx context.Context, tuple types.Tuple) (valid bool, skip bool, err error) {
+	ok, err := i(tuple)
+	return ok, false, err
 }
