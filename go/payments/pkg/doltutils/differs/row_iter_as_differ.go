@@ -37,26 +37,18 @@ type MapRowsAsDiffs struct {
 func NewMapRowsAsDiffs(ctx context.Context, nbf *types.NomsBinFormat, changeType types.DiffChangeType, m types.Map, startInclusive, endExclusive types.Value) *MapRowsAsDiffs {
 	var readRange *noms.ReadRange
 	if !types.IsNull(startInclusive) && !types.IsNull(endExclusive) {
-		readRange = noms.NewRangeStartingAt(startInclusive.(types.Tuple), func(tuple types.Tuple) (bool, error) {
-			return tuple.Less(nbf, endExclusive)
-		})
+		readRange = noms.NewRangeStartingAt(startInclusive.(types.Tuple), inRangeCheckLess{endExclusive, nbf})
 	} else if !types.IsNull(startInclusive) {
-		readRange = noms.NewRangeStartingAt(startInclusive.(types.Tuple), func(tuple types.Tuple) (bool, error) {
-			return true, nil
-		})
+		readRange = noms.NewRangeStartingAt(startInclusive.(types.Tuple), noms.InRangeCheckAlways{})
 	} else if !types.IsNull(endExclusive) {
-		readRange = noms.NewRangeEndingBefore(endExclusive.(types.Tuple), func(tuple types.Tuple) (bool, error) {
-			return true, nil
-		})
+		readRange = noms.NewRangeEndingBefore(endExclusive.(types.Tuple), noms.InRangeCheckAlways{})
 	} else {
 		// range of all values.
 		readRange = &noms.ReadRange{
 			Start:     types.EmptyTuple(nbf),
 			Inclusive: true,
 			Reverse:   false,
-			Check: func(tuple types.Tuple) (bool, error) {
-				return true, nil
-			},
+			Check:     noms.InRangeCheckAlways{},
 		}
 	}
 
@@ -102,4 +94,18 @@ func (m *MapRowsAsDiffs) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.
 	}
 
 	return diffs, len(diffs) > 0, nil
+}
+
+// inRangeCheckLess check that a given tuple is in range by comparing it to the enclosed value.
+type inRangeCheckLess struct {
+	val types.Value
+	nbf *types.NomsBinFormat
+}
+
+var _ noms.InRangeCheck = inRangeCheckLess{}
+
+// Check implements the interface noms.InRangeCheck.
+func (i inRangeCheckLess) Check(ctx context.Context, tuple types.Tuple) (valid bool, skip bool, err error) {
+	ok, err := tuple.Less(i.nbf, i.val)
+	return ok, false, err
 }
