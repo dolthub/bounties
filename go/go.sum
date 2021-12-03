@@ -163,8 +163,8 @@ github.com/denisbrodbeck/machineid v1.0.1/go.mod h1:dJUwb7PTidGDeYyUBmXZ2GphQBbj
 github.com/denisenkom/go-mssqldb v0.10.0/go.mod h1:xbL0rPBG9cCiLr28tMa8zpbdarY27NDyej4t/EjAShU=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
-github.com/dolthub/dolt/go v0.0.0-20211203093109-3871b0a0063f h1:QyHqq8nRX3h7TeJZBWT9bMoxahp6Hwb5hCNy2WYmqXQ=
-github.com/dolthub/dolt/go v0.0.0-20211203093109-3871b0a0063f/go.mod h1:0HImxkkj+dowJLZCQOXduJyEmRV3jKgUxUqNmVO7mcY=
+github.com/dolthub/dolt/go v0.0.0-20211203215037-e09d71ebc0a2 h1:dTz0yDe3TH0nAnvCP+7KU3ZcZCOmcXHKz3Eby4LTA8A=
+github.com/dolthub/dolt/go v0.0.0-20211203215037-e09d71ebc0a2/go.mod h1:0HImxkkj+dowJLZCQOXduJyEmRV3jKgUxUqNmVO7mcY=
 github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078 h1:nrkoh/RcgTq5EsWTcbSBF8KQghCtM+1dhyslghbBoj8=
 github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078/go.mod h1:8Jdiq6CVg8HM4n9fF17sGgXUpFa98zDyscW0A7OQmuM=
 github.com/dolthub/fslock v0.0.3 h1:iLMpUIvJKMKm92+N1fmHVdxJP5NdyDK5bK7z7Ba2s2U=
