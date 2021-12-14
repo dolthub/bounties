@@ -21,7 +21,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -263,19 +262,13 @@ func genTableState(ctx context.Context, vrw types.ValueReadWriter) ([]tableState
 
 func createTable(ctx context.Context, ddb *doltdb.DoltDB, state tableState) (*doltdb.Table, error) {
 	vrw := ddb.ValueReadWriter()
-	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, state.sch)
-
-	if err != nil {
-		return nil, err
-	}
-
 	m, err := types.NewMap(ctx, ddb.ValueReadWriter())
 
 	if err != nil {
 		return nil, err
 	}
 
-	tbl, err := doltdb.NewTable(ctx, vrw, schVal, state.rowData, m, nil)
+	tbl, err := doltdb.NewTable(ctx, vrw, state.sch, state.rowData, m, nil)
 
 	if err != nil {
 		return nil, err
