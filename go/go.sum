@@ -165,8 +165,8 @@ github.com/denisenkom/go-mssqldb v0.10.0 h1:QykgLZBorFE95+gO3u9esLd0BmbvpWp0/waN
 github.com/denisenkom/go-mssqldb v0.10.0/go.mod h1:xbL0rPBG9cCiLr28tMa8zpbdarY27NDyej4t/EjAShU=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
-github.com/dolthub/dolt/go v0.0.0-20220103200503-e15554f98a9c h1:NkCNB3PpPOy2DFFSGHxNsSYKUAAZJE4j61z8sFRNY+E=
-github.com/dolthub/dolt/go v0.0.0-20220103200503-e15554f98a9c/go.mod h1:N1t43n4aZHRnnlWlaYt2G4GsjkvSHwBOR+un42kpklw=
+github.com/dolthub/dolt/go v0.0.0-20220103232020-4e1f5421559f h1:Y8bLMlOmOR/j2Ks6jRgOoDzDgskvrVGOexHwUC4UtzQ=
+github.com/dolthub/dolt/go v0.0.0-20220103232020-4e1f5421559f/go.mod h1:N1t43n4aZHRnnlWlaYt2G4GsjkvSHwBOR+un42kpklw=
 github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078 h1:nrkoh/RcgTq5EsWTcbSBF8KQghCtM+1dhyslghbBoj8=
 github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078/go.mod h1:8Jdiq6CVg8HM4n9fF17sGgXUpFa98zDyscW0A7OQmuM=
 github.com/dolthub/fslock v0.0.3 h1:iLMpUIvJKMKm92+N1fmHVdxJP5NdyDK5bK7z7Ba2s2U=
