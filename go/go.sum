@@ -165,14 +165,14 @@ github.com/denisenkom/go-mssqldb v0.10.0 h1:QykgLZBorFE95+gO3u9esLd0BmbvpWp0/waN
 github.com/denisenkom/go-mssqldb v0.10.0/go.mod h1:xbL0rPBG9cCiLr28tMa8zpbdarY27NDyej4t/EjAShU=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
-github.com/dolthub/dolt/go v0.0.0-20220103232020-4e1f5421559f h1:Y8bLMlOmOR/j2Ks6jRgOoDzDgskvrVGOexHwUC4UtzQ=
-github.com/dolthub/dolt/go v0.0.0-20220103232020-4e1f5421559f/go.mod h1:N1t43n4aZHRnnlWlaYt2G4GsjkvSHwBOR+un42kpklw=
+github.com/dolthub/dolt/go v0.0.0-20220106221915-f3dd70543516 h1:JAeiSk/GipB6ZmRqzR/qeCcrdxm63s/wj51KXXooX4c=
+github.com/dolthub/dolt/go v0.0.0-20220106221915-f3dd70543516/go.mod h1:ECuBClCgnmbWI596fxuXP5bRdS4Gzb5NXFfNu0G8hIY=
 github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078 h1:nrkoh/RcgTq5EsWTcbSBF8KQghCtM+1dhyslghbBoj8=
 github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078/go.mod h1:8Jdiq6CVg8HM4n9fF17sGgXUpFa98zDyscW0A7OQmuM=
 github.com/dolthub/fslock v0.0.3 h1:iLMpUIvJKMKm92+N1fmHVdxJP5NdyDK5bK7z7Ba2s2U=
 github.com/dolthub/fslock v0.0.3/go.mod h1:QWql+P17oAAMLnL4HGB5tiovtDuAjdDTPbuqx7bYfa0=
-github.com/dolthub/go-mysql-server v0.11.1-0.20220103192829-bdff166f70e6 h1:BFH+3wESDAYy1tP1+5uVDRJDhl+WYSUtVdD+GhGohXo=
-github.com/dolthub/go-mysql-server v0.11.1-0.20220103192829-bdff166f70e6/go.mod h1:tyrWU1vUzj/ilniOAefGJquvOpHNSrFSUHVWJqlSIFc=
+github.com/dolthub/go-mysql-server v0.11.1-0.20220106211700-1c112627855c h1:1GGcuzFo+arcR4EmZVmCl07Ng0GYSdzLhhkHb2PJgZk=
+github.com/dolthub/go-mysql-server v0.11.1-0.20220106211700-1c112627855c/go.mod h1:tyrWU1vUzj/ilniOAefGJquvOpHNSrFSUHVWJqlSIFc=
 github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446 h1:0ol5pj+QlKUKAtqs1LiPM3ZJKs+rHPgLSsMXmhTrCAM=
 github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446/go.mod h1:dhGBqcCEfK5kuFmeO5+WOx3hqc1k3M29c1oS/R7N4ms=
 github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66 h1:WRPDbpJWEnPxPmiuOTndT+lUWUeGjx6eoNOK9O4tQQQ=
@@ -448,6 +448,7 @@ github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7V
 github.com/julienschmidt/httprouter v1.3.0/go.mod h1:JR6WtHb+2LUe8TCKY3cZOxFyyO8IZAc4RVcycCCAKdM=
 github.com/karrick/godirwalk v1.8.0/go.mod h1:H5KPZjojv4lE+QYImBI8xVtrBRgYrIVsaRPx4tDPEn4=
 github.com/karrick/godirwalk v1.10.3/go.mod h1:RoGL9dQei4vP9ilrpETWE8CLOZ1kiN0LhBygSwrAsHA=
+github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6/go.mod h1:UtDV9qK925GVmbdjR+e1unqoo+wGWNHHC6XB1Eu6wpE=
 github.com/kisielk/errcheck v1.1.0/go.mod h1:EZBBE59ingxPouuu3KfxchcWSUPOHkagtvWXihfKN4Q=
 github.com/kisielk/errcheck v1.5.0/go.mod h1:pFxgyoBC7bSaBwPgfKdkLd5X25qrDl4LWUI2bnpBCr8=
 github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=
