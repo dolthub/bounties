@@ -39,7 +39,7 @@ func GetRows(ctx context.Context, root *doltdb.RootValue, tableName string) (typ
 		return m, nil, nil
 	}
 
-	rowData, err := tbl.GetRowData(ctx)
+	rowData, err := tbl.GetNomsRowData(ctx)
 
 	if err != nil {
 		return types.EmptyMap, nil, err

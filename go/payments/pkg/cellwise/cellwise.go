@@ -516,7 +516,7 @@ func (cwa CWAttribution) getDiffer(ctx context.Context, shard AttributionShard, 
 	var rowData types.Map
 
 	if tbl != nil {
-		rowData, err = tbl.GetRowData(ctx)
+		rowData, err = tbl.GetNomsRowData(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -528,7 +528,7 @@ func (cwa CWAttribution) getDiffer(ctx context.Context, shard AttributionShard, 
 	}
 
 	if prevTbl != nil {
-		prevRowData, err = prevTbl.GetRowData(ctx)
+		prevRowData, err = prevTbl.GetNomsRowData(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
