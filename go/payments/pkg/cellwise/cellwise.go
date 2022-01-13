@@ -17,9 +17,12 @@ package cellwise
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"go.uber.org/zap"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/dolthub/bounties/go/payments/pkg/att"
 	"github.com/dolthub/bounties/go/payments/pkg/doltutils/differs"
@@ -47,14 +50,16 @@ var _ att.AttributionMethod = CWAttribution{}
 // CWAttribution implements att.AttributionMethod and provides cellwise attribution
 type CWAttribution struct {
 	ddb         *doltdb.DoltDB
+	logger      *zap.Logger
 	startHash   hash.Hash
 	shardParams CWAttShardParams
 	shardStore  att.ShardStore
 }
 
 // NewCWAtt returns a new CWAttribution object
-func NewCWAtt(ddb *doltdb.DoltDB, startHash hash.Hash, shardStore att.ShardStore, params CWAttShardParams) CWAttribution {
+func NewCWAtt(logger *zap.Logger, ddb *doltdb.DoltDB, startHash hash.Hash, shardStore att.ShardStore, params CWAttShardParams) CWAttribution {
 	return CWAttribution{
+		logger:      logger,
 		ddb:         ddb,
 		startHash:   startHash,
 		shardStore:  shardStore,
@@ -93,7 +98,7 @@ func (cwa CWAttribution) SerializeResults(ctx context.Context, results att.Shard
 	return buf.Bytes(), nil
 }
 
-// DeserializeResults takes a []bite and deserializes it ta a ShardResult
+// DeserializeResults takes a []byte and deserializes it ta a ShardResult
 func (cwa CWAttribution) DeserializeResults(ctx context.Context, data []byte) (att.ShardResult, error) {
 	buf := bytes.NewBuffer(data)
 	vals, err := valuefile.ReadFromReader(ctx, buf)
@@ -263,6 +268,10 @@ func (cwa CWAttribution) CollectShards(ctx context.Context, commit, prevCommit *
 }
 
 func (cwa CWAttribution) collectShards(ctx context.Context, summary CellwiseAttSummary, root, prevRoot *doltdb.RootValue) ([]att.ShardInfo, error) {
+	if jsonData, err := json.Marshal(summary); err == nil {
+		cwa.logger.Info("collecting shards", zap.String("summary", string(jsonData)))
+	}
+
 	tables, err := cwa.getScoredTables(ctx, summary, root)
 
 	if err != nil {
@@ -375,6 +384,14 @@ func (cwa CWAttribution) getScoredTables(ctx context.Context, summary CellwiseAt
 
 // ProcessShard processes a single shard
 func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *doltdb.Commit, shardInfo att.ShardInfo) (att.ShardResult, error) {
+	if infoJson, err := json.Marshal(shardInfo); err == nil {
+		start := time.Now()
+		cwa.logger.Info("Processing Shard Start", zap.String("shard_info", string(infoJson)))
+		defer func() {
+			cwa.logger.Info("Processing Shard End", zap.String("shard_info", string(infoJson)), zap.Duration("took", time.Since(start)))
+		}()
+	}
+
 	commitHash, err := cm.HashOf()
 	if err != nil {
 		return nil, err
@@ -430,7 +447,7 @@ func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, 
 	}
 
 	basePath := commitHash.String()
-	shardMgr := NewShardManager(nbf, int(commitIdx)+1, shard, shard.Table, basePath, cwa.shardParams, cwa.shardStore)
+	shardMgr := NewShardManager(cwa.logger, nbf, int(commitIdx)+1, shard, shard.Table, basePath, cwa.shardParams, cwa.shardStore)
 	err = cwa.attributeDiffs(ctx, commitIdx, shardMgr, sch, attribData, differ)
 	if err != nil && err != io.EOF {
 		return nil, err
@@ -490,6 +507,13 @@ func (cwa CWAttribution) ProcessResults(ctx context.Context, commitHash hash.Has
 }
 
 func (cwa CWAttribution) readShardFile(ctx context.Context, shard AttributionShard) (types.Map, error) {
+	start := time.Now()
+	shardKey := shard.Key(cwa.ddb.Format())
+	cwa.logger.Info("Reading shard", zap.String("shard_key", shardKey))
+	defer func() {
+		cwa.logger.Info("Reading shard", zap.String("shard_key", shardKey), zap.Duration("took", time.Since(start)))
+	}()
+
 	val, err := cwa.shardStore.ReadShard(ctx, shard.Path)
 	if err != nil {
 		return types.Map{}, err
@@ -521,6 +545,8 @@ func (cwa CWAttribution) getDiffer(ctx context.Context, shard AttributionShard, 
 			return nil, nil, err
 		}
 
+		rowData.IteratorAt()
+		rowData.IteratorFrom()
 		sch, err = tbl.GetSchema(ctx)
 		if err != nil {
 			return nil, nil, err
@@ -578,6 +604,22 @@ func (cwa CWAttribution) attributeDiffs(ctx context.Context, commitIdx int16, sh
 
 	nbf := cwa.ddb.Format()
 
+	count := map[string]int{
+		"new_data":       0,
+		"unchanged_data": 0,
+		"modified_data":  0,
+	}
+	incAndLog := func(key string) {
+		if key != "" {
+			count[key]++
+		}
+
+		if key == "" || count[key]%10_000 == 0 {
+			cwa.logger.Info("attribution update", zap.Int("new", count["new_data"]), zap.Int("unchanged", count["unchanged_data"]), zap.Int("modified", count["modified_data"]))
+		}
+	}
+	defer incAndLog("")
+
 	var attKey types.Value
 	var attVal types.Value
 	var diffs []*diff2.Difference
@@ -606,13 +648,18 @@ func (cwa CWAttribution) attributeDiffs(ctx context.Context, commitIdx int16, sh
 		}
 
 		if attKey == nil { // no existing attribution data.  This is a new row
+			incAndLog("new_data")
+
 			err = cwa.processDiffWithNoPrevAtt(ctx, shardMgr, sch, commitIdx, diffs[0])
 			diffs = nil
 		} else if len(diffs) == 0 { // have attribution data but no diff.  attribution should stay untouched
+			incAndLog("unchanged_data")
+
 			err = cwa.processUnchangedAttribution(ctx, shardMgr, attKey, attVal)
 			attKey = nil
 			attVal = nil
 		} else {
+
 			// have an existing attributed row, and a row that has changed
 			diffKey := diffs[0].KeyValue
 			isLess, err := attKey.Less(nbf, diffKey)
@@ -622,17 +669,20 @@ func (cwa CWAttribution) attributeDiffs(ctx context.Context, commitIdx int16, sh
 			}
 
 			if isLess {
+				incAndLog("unchanged_data")
 				// the attributed row comes before the changed row.  attribution stays untouched
 				err = cwa.processUnchangedAttribution(ctx, shardMgr, attKey, attVal)
 				attKey = nil
 				attVal = nil
 			} else if attKey.Equals(diffKey) {
+				incAndLog("modified_data")
 				// existing attributed row matches the row that has changed.  Update attribution
 				err = cwa.updateAttFromDiff(ctx, shardMgr, sch, commitIdx, attKey, attVal, diffs[0])
 				attKey = nil
 				attVal = nil
 				diffs = nil
 			} else {
+				incAndLog("new_data")
 				// the changed row is less than the attributed row.  This row is new.  add new attribution
 				err = cwa.processDiffWithNoPrevAtt(ctx, shardMgr, sch, commitIdx, diffs[0])
 				diffs = nil

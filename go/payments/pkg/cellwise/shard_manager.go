@@ -18,6 +18,8 @@ import (
 	"context"
 	"errors"
 	"github.com/dolthub/bounties/go/payments/pkg/att"
+	"go.uber.org/zap"
+	"time"
 
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/valuefile"
@@ -85,6 +87,7 @@ func (q *attQueue) PeekKey() types.Value {
 
 // shardManager manages writing of output shards
 type shardManager struct {
+	logger        *zap.Logger
 	nbf           *types.NomsBinFormat
 	shardBasePath string
 	shardStore    att.ShardStore
@@ -107,8 +110,9 @@ type shardManager struct {
 
 // NewShardManager takes an input shard, a ShardStore, some ShardParams and some other metadata and returns a shardManager
 // which is used to manage dynamic sharding, and persisting of shard data
-func NewShardManager(nbf *types.NomsBinFormat, numCommits int, inputShard AttributionShard, table, shardBasePath string, shardParams CWAttShardParams, shardStore att.ShardStore) *shardManager {
+func NewShardManager(logger *zap.Logger, nbf *types.NomsBinFormat, numCommits int, inputShard AttributionShard, table, shardBasePath string, shardParams CWAttShardParams, shardStore att.ShardStore) *shardManager {
 	return &shardManager{
+		logger:        logger,
 		nbf:           nbf,
 		table:         table,
 		inputShard:    inputShard,
@@ -207,6 +211,12 @@ func (sm *shardManager) close(ctx context.Context) error {
 // finalizes an output shard and persists it.
 func (sm *shardManager) closeCurrentShard(ctx context.Context, end types.Value) error {
 	if sm.rowsBufferred > 0 {
+		start := time.Now()
+		sm.logger.Info("closing and persisting shard")
+		defer func() {
+			sm.logger.Info("closed shard", zap.Duration("took", time.Since(start)))
+		}()
+
 		// close the streaming map and get the types.Map which we will persist
 		close(sm.streamMapCh)
 		m, err := sm.outMap.Wait()
