@@ -9,4 +9,3 @@ require (
 	github.com/tidwall/pretty v1.0.1 // indirect
 	go.uber.org/zap v1.15.0
 )
-

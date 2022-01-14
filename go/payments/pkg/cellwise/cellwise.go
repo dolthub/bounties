@@ -395,11 +395,13 @@ func (cwa CWAttribution) getScoredTables(ctx context.Context, summary CellwiseAt
 
 // ProcessShard processes a single shard
 func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *doltdb.Commit, shardInfo att.ShardInfo) (att.ShardResult, error) {
+	shardKey := shardInfo.Key(cwa.ddb.Format())
+
 	if infoJson, err := json.Marshal(shardInfo); err == nil {
 		start := time.Now()
-		cwa.logger.Info("Processing Shard Start", zap.String("shard_info", string(infoJson)))
+		cwa.logger.Info("Processing Shard Start", zap.String("shard_key", shardKey), zap.String("shard_info", string(infoJson)))
 		defer func() {
-			cwa.logger.Info("Processing Shard End", zap.String("shard_info", string(infoJson)), zap.Duration("took", time.Since(start)))
+			cwa.logger.Info("Processing Shard End", zap.String("shard_key", shardKey), zap.String("shard_info", string(infoJson)), zap.Duration("took", time.Since(start)))
 		}()
 	}
 
@@ -422,6 +424,7 @@ func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, 
 	}
 
 	if unchangedShard, ok := shardInfo.(UnchangedShard); ok {
+		cwa.logger.Info("Shard has no changes", zap.String("shard_key", shardKey))
 		return processUnchangedShard(ctx, unchangedShard.AttributionShard)
 	}
 
@@ -694,21 +697,21 @@ func (cwa CWAttribution) attributeDiffs(ctx context.Context, commitIdx int16, sh
 
 	nbf := cwa.ddb.Format()
 
-	count := map[string]int{
-		"new_data":       0,
-		"unchanged_data": 0,
-		"modified_data":  0,
-	}
-	incAndLog := func(key string) {
-		if key != "" {
-			count[key]++
+	var newData int
+	var unchangedData int
+	var modifiedData int
+	var total int
+	incAndLog := func(p *int) {
+		if p != nil {
+			total++
+			*p = *p + 1
 		}
 
-		if key == "" || count[key]%10_000 == 0 {
-			cwa.logger.Info("attribution update", zap.Int("new", count["new_data"]), zap.Int("unchanged", count["unchanged_data"]), zap.Int("modified", count["modified_data"]))
+		if p == nil || total%50_000 == 0 {
+			cwa.logger.Info("attribution update", zap.Int("new", newData), zap.Int("unchanged", unchangedData), zap.Int("modified", modifiedData))
 		}
 	}
-	defer incAndLog("")
+	defer incAndLog(nil)
 
 	var attKey types.Value
 	var attVal types.Value
@@ -744,18 +747,17 @@ func (cwa CWAttribution) attributeDiffs(ctx context.Context, commitIdx int16, sh
 		}
 
 		if attKey == nil { // no existing attribution data.  This is a new row
-			incAndLog("new_data")
+			incAndLog(&newData)
 
 			err = cwa.processDiffWithNoPrevAtt(ctx, shardMgr, sch, commitIdx, diffs[0])
 			diffs = nil
 		} else if len(diffs) == 0 { // have attribution data but no diff.  attribution should stay untouched
-			incAndLog("unchanged_data")
+			incAndLog(&unchangedData)
 
 			err = cwa.processUnchangedAttribution(ctx, shardMgr, attKey, attVal)
 			attKey = nil
 			attVal = nil
 		} else {
-
 			// have an existing attributed row, and a row that has changed
 			diffKey := diffs[0].KeyValue
 			isLess, err := attKey.Less(nbf, diffKey)
@@ -765,20 +767,20 @@ func (cwa CWAttribution) attributeDiffs(ctx context.Context, commitIdx int16, sh
 			}
 
 			if isLess {
-				incAndLog("unchanged_data")
+				incAndLog(&unchangedData)
 				// the attributed row comes before the changed row.  attribution stays untouched
 				err = cwa.processUnchangedAttribution(ctx, shardMgr, attKey, attVal)
 				attKey = nil
 				attVal = nil
 			} else if attKey.Equals(diffKey) {
-				incAndLog("modified_data")
+				incAndLog(&modifiedData)
 				// existing attributed row matches the row that has changed.  Update attribution
 				err = cwa.updateAttFromDiff(ctx, shardMgr, sch, commitIdx, attKey, attVal, diffs[0])
 				attKey = nil
 				attVal = nil
 				diffs = nil
 			} else {
-				incAndLog("new_data")
+				incAndLog(&newData)
 				// the changed row is less than the attributed row.  This row is new.  add new attribution
 				err = cwa.processDiffWithNoPrevAtt(ctx, shardMgr, sch, commitIdx, diffs[0])
 				diffs = nil
@@ -892,30 +894,36 @@ func (cwa CWAttribution) subdivideShard(ctx context.Context, shard AttributionSh
 		}
 
 		start := shard.StartInclusive
+		var subdivisionKeys []string
 		for i := int64(0); i < numSubs-1; i++ {
 			k, _, err := subDivideRows.At(ctx, uint64(startIdx+subDivisionStep))
 			if err != nil {
 				return nil, err
 			}
 
-			subDivisions = append(subDivisions, AttributionShard{
+			newSub := AttributionShard{
 				Table:          shard.Table,
 				Path:           shard.Path,
 				StartInclusive: start,
 				EndExclusive:   k,
-			})
+			}
+			subDivisions = append(subDivisions, newSub)
+			subdivisionKeys = append(subdivisionKeys, newSub.Key(cwa.ddb.Format()))
 
 			start = k
 			startIdx += subDivisionStep
 		}
 
-		subDivisions = append(subDivisions, AttributionShard{
+		lastSub := AttributionShard{
 			Table:          shard.Table,
 			Path:           shard.Path,
 			StartInclusive: start,
 			EndExclusive:   shard.EndExclusive,
-		})
+		}
+		subDivisions = append(subDivisions, lastSub)
+		subdivisionKeys = append(subdivisionKeys, lastSub.Key(cwa.ddb.Format()))
 
+		cwa.logger.Info("Subdividing Shard", zap.String("shard_key", shard.Key(cwa.ddb.Format())), zap.Int64("num_subdivisions", numSubs), zap.Int64("rowdata_range_size_delta", delta), zap.Strings("subdivisions", subdivisionKeys))
 		return subDivisions, nil
 	}
 }
