@@ -17,9 +17,12 @@ package cellwise
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"go.uber.org/zap"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/dolthub/bounties/go/payments/pkg/att"
 	"github.com/dolthub/bounties/go/payments/pkg/doltutils/differs"
@@ -40,6 +43,8 @@ type CWAttShardParams struct {
 	// RowsPerShard define the count at which point a shard is cut and a new one starts
 	RowsPerShard int
 	// MinShardSize uint64 need to implement
+
+	SubdivideDiffsSize int64
 }
 
 var _ att.AttributionMethod = CWAttribution{}
@@ -47,14 +52,16 @@ var _ att.AttributionMethod = CWAttribution{}
 // CWAttribution implements att.AttributionMethod and provides cellwise attribution
 type CWAttribution struct {
 	ddb         *doltdb.DoltDB
+	logger      *zap.Logger
 	startHash   hash.Hash
 	shardParams CWAttShardParams
 	shardStore  att.ShardStore
 }
 
 // NewCWAtt returns a new CWAttribution object
-func NewCWAtt(ddb *doltdb.DoltDB, startHash hash.Hash, shardStore att.ShardStore, params CWAttShardParams) CWAttribution {
+func NewCWAtt(logger *zap.Logger, ddb *doltdb.DoltDB, startHash hash.Hash, shardStore att.ShardStore, params CWAttShardParams) CWAttribution {
 	return CWAttribution{
+		logger:      logger,
 		ddb:         ddb,
 		startHash:   startHash,
 		shardStore:  shardStore,
@@ -93,7 +100,7 @@ func (cwa CWAttribution) SerializeResults(ctx context.Context, results att.Shard
 	return buf.Bytes(), nil
 }
 
-// DeserializeResults takes a []bite and deserializes it ta a ShardResult
+// DeserializeResults takes a []byte and deserializes it ta a ShardResult
 func (cwa CWAttribution) DeserializeResults(ctx context.Context, data []byte) (att.ShardResult, error) {
 	buf := bytes.NewBuffer(data)
 	vals, err := valuefile.ReadFromReader(ctx, buf)
@@ -263,6 +270,10 @@ func (cwa CWAttribution) CollectShards(ctx context.Context, commit, prevCommit *
 }
 
 func (cwa CWAttribution) collectShards(ctx context.Context, summary CellwiseAttSummary, root, prevRoot *doltdb.RootValue) ([]att.ShardInfo, error) {
+	if jsonData, err := json.Marshal(summary); err == nil {
+		cwa.logger.Info("collecting shards", zap.String("summary", string(jsonData)))
+	}
+
 	tables, err := cwa.getScoredTables(ctx, summary, root)
 
 	if err != nil {
@@ -289,7 +300,12 @@ func (cwa CWAttribution) collectShards(ctx context.Context, summary CellwiseAttS
 		// append to allShards creating a special UnchangedShard object for shards that have not changed
 		for i := range shards {
 			if hasDiffs[i] {
-				allShards = append(allShards, shards[i])
+				subDivided, err := cwa.subdivideShard(ctx, shards[i], table, root, prevRoot)
+				if err != nil {
+					return nil, err
+				}
+
+				allShards = append(allShards, subDivided...)
 			} else {
 				allShards = append(allShards, UnchangedShard{shards[i]})
 			}
@@ -332,6 +348,10 @@ func (cwa CWAttribution) shardsHaveDiffs(ctx context.Context, shards []Attributi
 	hasDiffs := make([]bool, len(shards))
 	if !tblHash.Equal(prevTblHash) {
 		for i, shard := range shards {
+			if err != nil {
+				return nil, err
+			}
+
 			_, differ, err := cwa.getDiffer(ctx, shard, tbl, prevTbl)
 			if err != nil {
 				return nil, err
@@ -375,6 +395,16 @@ func (cwa CWAttribution) getScoredTables(ctx context.Context, summary CellwiseAt
 
 // ProcessShard processes a single shard
 func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *doltdb.Commit, shardInfo att.ShardInfo) (att.ShardResult, error) {
+	shardKey := shardInfo.Key(cwa.ddb.Format())
+
+	if infoJson, err := json.Marshal(shardInfo); err == nil {
+		start := time.Now()
+		cwa.logger.Info("Processing Shard Start", zap.String("shard_key", shardKey), zap.String("shard_info", string(infoJson)))
+		defer func() {
+			cwa.logger.Info("Processing Shard End", zap.String("shard_key", shardKey), zap.String("shard_info", string(infoJson)), zap.Duration("took", time.Since(start)))
+		}()
+	}
+
 	commitHash, err := cm.HashOf()
 	if err != nil {
 		return nil, err
@@ -394,6 +424,7 @@ func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, 
 	}
 
 	if unchangedShard, ok := shardInfo.(UnchangedShard); ok {
+		cwa.logger.Info("Shard has no changes", zap.String("shard_key", shardKey))
 		return processUnchangedShard(ctx, unchangedShard.AttributionShard)
 	}
 
@@ -430,8 +461,8 @@ func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, 
 	}
 
 	basePath := commitHash.String()
-	shardMgr := NewShardManager(nbf, int(commitIdx)+1, shard, shard.Table, basePath, cwa.shardParams, cwa.shardStore)
-	err = cwa.attributeDiffs(ctx, commitIdx, shardMgr, sch, attribData, differ)
+	shardMgr := NewShardManager(cwa.logger, nbf, int(commitIdx)+1, shard, shard.Table, basePath, cwa.shardParams, cwa.shardStore)
+	err = cwa.attributeDiffs(ctx, commitIdx, shardMgr, shard, sch, attribData, differ)
 	if err != nil && err != io.EOF {
 		return nil, err
 	}
@@ -490,6 +521,13 @@ func (cwa CWAttribution) ProcessResults(ctx context.Context, commitHash hash.Has
 }
 
 func (cwa CWAttribution) readShardFile(ctx context.Context, shard AttributionShard) (types.Map, error) {
+	start := time.Now()
+	shardKey := shard.Key(cwa.ddb.Format())
+	cwa.logger.Info("Reading shard", zap.String("shard_key", shardKey))
+	defer func() {
+		cwa.logger.Info("Reading shard", zap.String("shard_key", shardKey), zap.Duration("took", time.Since(start)))
+	}()
+
 	val, err := cwa.shardStore.ReadShard(ctx, shard.Path)
 	if err != nil {
 		return types.Map{}, err
@@ -501,6 +539,73 @@ func (cwa CWAttribution) readShardFile(ctx context.Context, shard AttributionSha
 	}
 
 	return attribData, nil
+}
+
+func getRangeSize(ctx context.Context, rowData types.Map, startInc, endExc types.Value) (int64, error) {
+	if rowData.Empty() {
+		return 0, nil
+	}
+
+	var startIdx int64
+	var endIdx int64
+	var err error
+
+	if !types.IsNull(startInc) {
+		startIdx, err = rowData.IndexForKey(ctx, startInc)
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		startIdx = 0
+	}
+
+	if !types.IsNull(endExc) {
+		endIdx, err = rowData.IndexForKey(ctx, endExc)
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		endIdx = int64(rowData.Len())
+	}
+
+	return endIdx - startIdx, nil
+}
+
+func (cwa CWAttribution) getRowSizeChange(ctx context.Context, shard AttributionShard, tbl, prevTbl *doltdb.Table) (int64, error) {
+	var prevRowData types.Map
+	var rowData types.Map
+	var err error
+
+	if tbl != nil {
+		rowData, err = tbl.GetNomsRowData(ctx)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	if prevTbl != nil {
+		prevRowData, err = prevTbl.GetNomsRowData(ctx)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	rangeSize, err := getRangeSize(ctx, rowData, shard.StartInclusive, shard.EndExclusive)
+	if err != nil {
+		return 0, err
+	}
+
+	prevRangeSize, err := getRangeSize(ctx, prevRowData, shard.StartInclusive, shard.EndExclusive)
+	if err != nil {
+		return 0, err
+	}
+
+	change := rangeSize - prevRangeSize
+	if change < 0 {
+		change = -change
+	}
+
+	return change, nil
 }
 
 // getDiffer returns a differs.Differ implementation which encapsulates all the changes.
@@ -561,13 +666,27 @@ func (cwa CWAttribution) getDiffer(ctx context.Context, shard AttributionShard, 
 
 // attributeDiffs loops over the previous attribution and the diffs updating the attribution and sending it to the shard
 // manager to be persisted.
-func (cwa CWAttribution) attributeDiffs(ctx context.Context, commitIdx int16, shardMgr *shardManager, sch schema.Schema, attribData *types.Map, differ differs.Differ) error {
-	var attItr types.MapIterator
+func (cwa CWAttribution) attributeDiffs(ctx context.Context, commitIdx int16, shardMgr *shardManager, shard AttributionShard, sch schema.Schema, attribData *types.Map, differ differs.Differ) error {
+	var attItr types.MapTupleIterator
 	var err error
 
 	// get an iterator for iterating over the existing attribution for the shard.  If there is no attribution gets an empty iterator
 	if attribData != nil {
-		attItr, err = attribData.Iterator(ctx)
+		var rangeStart int64
+		rangeEnd := int64(attribData.Len())
+
+		if !types.IsNull(shard.StartInclusive) {
+			rangeStart, err = attribData.IndexForKey(ctx, shard.StartInclusive)
+			if err != nil {
+				return err
+			}
+		}
+
+		if !types.IsNull(shard.EndExclusive) {
+			rangeEnd, err = attribData.IndexForKey(ctx, shard.EndExclusive)
+		}
+
+		attItr, err = attribData.RangeIterator(ctx, uint64(rangeStart), uint64(rangeEnd))
 
 		if err != nil {
 			return err
@@ -578,16 +697,38 @@ func (cwa CWAttribution) attributeDiffs(ctx context.Context, commitIdx int16, sh
 
 	nbf := cwa.ddb.Format()
 
+	var newData int
+	var unchangedData int
+	var modifiedData int
+	var total int
+	incAndLog := func(p *int) {
+		if p != nil {
+			total++
+			*p = *p + 1
+		}
+
+		if p == nil || total%50_000 == 0 {
+			cwa.logger.Info("attribution update", zap.Int("new", newData), zap.Int("unchanged", unchangedData), zap.Int("modified", modifiedData))
+		}
+	}
+	defer incAndLog(nil)
+
 	var attKey types.Value
 	var attVal types.Value
 	var diffs []*diff2.Difference
 	for {
 		if attKey == nil {
 			// gets existing attribution data for the next previously attributed row
-			attKey, attVal, err = attItr.Next(ctx)
+			attKeyTpl, attValTpl, err := attItr.NextTuple(ctx)
 
-			if err != nil && err != io.EOF {
-				return err
+			if err != nil {
+				if err != io.EOF {
+					return err
+				}
+				// in the case of io.EOF attKey and attVal are not set
+			} else {
+				attKey = attKeyTpl
+				attVal = attValTpl
 			}
 		}
 
@@ -606,9 +747,13 @@ func (cwa CWAttribution) attributeDiffs(ctx context.Context, commitIdx int16, sh
 		}
 
 		if attKey == nil { // no existing attribution data.  This is a new row
+			incAndLog(&newData)
+
 			err = cwa.processDiffWithNoPrevAtt(ctx, shardMgr, sch, commitIdx, diffs[0])
 			diffs = nil
 		} else if len(diffs) == 0 { // have attribution data but no diff.  attribution should stay untouched
+			incAndLog(&unchangedData)
+
 			err = cwa.processUnchangedAttribution(ctx, shardMgr, attKey, attVal)
 			attKey = nil
 			attVal = nil
@@ -622,17 +767,20 @@ func (cwa CWAttribution) attributeDiffs(ctx context.Context, commitIdx int16, sh
 			}
 
 			if isLess {
+				incAndLog(&unchangedData)
 				// the attributed row comes before the changed row.  attribution stays untouched
 				err = cwa.processUnchangedAttribution(ctx, shardMgr, attKey, attVal)
 				attKey = nil
 				attVal = nil
 			} else if attKey.Equals(diffKey) {
+				incAndLog(&modifiedData)
 				// existing attributed row matches the row that has changed.  Update attribution
 				err = cwa.updateAttFromDiff(ctx, shardMgr, sch, commitIdx, attKey, attVal, diffs[0])
 				attKey = nil
 				attVal = nil
 				diffs = nil
 			} else {
+				incAndLog(&newData)
 				// the changed row is less than the attributed row.  This row is new.  add new attribution
 				err = cwa.processDiffWithNoPrevAtt(ctx, shardMgr, sch, commitIdx, diffs[0])
 				diffs = nil
@@ -680,4 +828,102 @@ func (cwa CWAttribution) updateAttFromDiff(ctx context.Context, shardMgr *shardM
 	}
 
 	return shardMgr.addRowAtt(ctx, key, ra, nil)
+}
+
+func getRowData(ctx context.Context, table string, root *doltdb.RootValue) (types.Map, error) {
+	tbl, ok, err := root.GetTable(ctx, table)
+
+	if err != nil {
+		return types.Map{}, err
+	} else if !ok {
+		return types.Map{}, doltdb.ErrTableNotFound
+	}
+
+	return tbl.GetNomsRowData(ctx)
+}
+
+func (cwa CWAttribution) subdivideShard(ctx context.Context, shard AttributionShard, table string, root *doltdb.RootValue, prevRoot *doltdb.RootValue) ([]att.ShardInfo, error) {
+	if cwa.shardParams.SubdivideDiffsSize <= 0 {
+		return []att.ShardInfo{shard}, nil
+	}
+
+	rowData, err := getRowData(ctx, table, root)
+	if err != nil {
+		return nil, err
+	}
+
+	prevRowData, err := getRowData(ctx, table, prevRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	size, err := getRangeSize(ctx, rowData, shard.StartInclusive, shard.EndExclusive)
+	if err != nil {
+		return nil, err
+	}
+
+	prevSize, err := getRangeSize(ctx, prevRowData, shard.StartInclusive, shard.EndExclusive)
+	if err != nil {
+		return nil, err
+	}
+
+	delta := size - prevSize
+	if delta < 0 {
+		delta = -delta
+	}
+
+	if delta <= cwa.shardParams.SubdivideDiffsSize {
+		return []att.ShardInfo{shard}, nil
+	} else {
+		var subDivisions []att.ShardInfo
+		subDivideRows := rowData
+
+		if prevSize > size {
+			subDivideRows = prevRowData
+		}
+
+		numSubs := (delta / cwa.shardParams.SubdivideDiffsSize) + 1
+		subDivisionStep := delta / numSubs
+
+		var startIdx int64
+		if !types.IsNull(shard.StartInclusive) {
+			startIdx, err = subDivideRows.IndexForKey(ctx, shard.StartInclusive)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		start := shard.StartInclusive
+		var subdivisionKeys []string
+		for i := int64(0); i < numSubs-1; i++ {
+			k, _, err := subDivideRows.At(ctx, uint64(startIdx+subDivisionStep))
+			if err != nil {
+				return nil, err
+			}
+
+			newSub := AttributionShard{
+				Table:          shard.Table,
+				Path:           shard.Path,
+				StartInclusive: start,
+				EndExclusive:   k,
+			}
+			subDivisions = append(subDivisions, newSub)
+			subdivisionKeys = append(subdivisionKeys, newSub.Key(cwa.ddb.Format()))
+
+			start = k
+			startIdx += subDivisionStep
+		}
+
+		lastSub := AttributionShard{
+			Table:          shard.Table,
+			Path:           shard.Path,
+			StartInclusive: start,
+			EndExclusive:   shard.EndExclusive,
+		}
+		subDivisions = append(subDivisions, lastSub)
+		subdivisionKeys = append(subdivisionKeys, lastSub.Key(cwa.ddb.Format()))
+
+		cwa.logger.Info("Subdividing Shard", zap.String("shard_key", shard.Key(cwa.ddb.Format())), zap.Int64("num_subdivisions", numSubs), zap.Int64("rowdata_range_size_delta", delta), zap.Strings("subdivisions", subdivisionKeys))
+		return subDivisions, nil
+	}
 }

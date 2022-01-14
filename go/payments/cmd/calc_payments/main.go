@@ -18,10 +18,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/pkg/profile"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/pkg/profile"
+	"go.uber.org/zap"
 
 	"github.com/dolthub/bounties/go/payments/pkg/att"
 	"github.com/dolthub/bounties/go/payments/pkg/cellwise"
@@ -145,7 +147,8 @@ func main() {
 	switch *methodStr {
 	case "cellwise":
 		shardParams := cellwise.CWAttShardParams{
-			RowsPerShard: 100_000,
+			RowsPerShard:       100_000,
+			SubdivideDiffsSize: 1_000_000,
 		}
 
 		shardStore, err := att.NewFilesysShardStore(filepath.Join(opts.buildDir, opts.startHash.String()))
@@ -153,7 +156,12 @@ func main() {
 			errExit(fmt.Sprintf("Failed to create local shardstore using the directory '%s': %v", opts.buildDir, err))
 		}
 
-		method = cellwise.NewCWAtt(dEnv.DoltDB, opts.startHash, shardStore, shardParams)
+		logger, err := zap.NewDevelopment()
+		if err != nil {
+			errExit(fmt.Sprintf("Failed to create logger: %s", err.Error()))
+		}
+
+		method = cellwise.NewCWAtt(logger, dEnv.DoltDB, opts.startHash, shardStore, shardParams)
 	default:
 		errExit(fmt.Sprintf("Unknown --method '%s'", *methodStr))
 	}

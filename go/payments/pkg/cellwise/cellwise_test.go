@@ -17,6 +17,7 @@ package cellwise
 import (
 	"context"
 	"fmt"
+	"go.uber.org/zap"
 	"os"
 	"path/filepath"
 	"testing"
@@ -137,7 +138,8 @@ func TestAttribution(t *testing.T) {
 		{
 			"31 rows per shard, min shard size 11",
 			CWAttShardParams{
-				RowsPerShard: 31,
+				RowsPerShard:       31,
+				SubdivideDiffsSize: 64,
 			},
 		},
 	}
@@ -157,7 +159,9 @@ func TestAttribution(t *testing.T) {
 			require.NoError(t, err)
 			shardStore, err := att.NewFilesysShardStore(filepath.Join(buildDir, startOfBountyHash.String()))
 			require.NoError(t, err)
-			cwAtt := NewCWAtt(dEnv.DoltDB, startOfBountyHash, shardStore, test.shardParams)
+			logger, err := zap.NewDevelopment()
+			require.NoError(t, err)
+			cwAtt := NewCWAtt(logger, dEnv.DoltDB, startOfBountyHash, shardStore, test.shardParams)
 			require.Equal(t, len(expected), len(commits))
 
 			var summary att.Summary = emptySummary(startOfBountyHash)
