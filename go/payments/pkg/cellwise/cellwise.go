@@ -43,6 +43,8 @@ type CWAttShardParams struct {
 	// RowsPerShard define the count at which point a shard is cut and a new one starts
 	RowsPerShard int
 	// MinShardSize uint64 need to implement
+
+	SubdivideDiffsSize int64
 }
 
 var _ att.AttributionMethod = CWAttribution{}
@@ -298,7 +300,12 @@ func (cwa CWAttribution) collectShards(ctx context.Context, summary CellwiseAttS
 		// append to allShards creating a special UnchangedShard object for shards that have not changed
 		for i := range shards {
 			if hasDiffs[i] {
-				allShards = append(allShards, shards[i])
+				subDivided, err := cwa.subdivideShard(ctx, shards[i], table, root, prevRoot)
+				if err != nil {
+					return nil, err
+				}
+
+				allShards = append(allShards, subDivided...)
 			} else {
 				allShards = append(allShards, UnchangedShard{shards[i]})
 			}
@@ -341,6 +348,10 @@ func (cwa CWAttribution) shardsHaveDiffs(ctx context.Context, shards []Attributi
 	hasDiffs := make([]bool, len(shards))
 	if !tblHash.Equal(prevTblHash) {
 		for i, shard := range shards {
+			if err != nil {
+				return nil, err
+			}
+
 			_, differ, err := cwa.getDiffer(ctx, shard, tbl, prevTbl)
 			if err != nil {
 				return nil, err
@@ -448,7 +459,7 @@ func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, 
 
 	basePath := commitHash.String()
 	shardMgr := NewShardManager(cwa.logger, nbf, int(commitIdx)+1, shard, shard.Table, basePath, cwa.shardParams, cwa.shardStore)
-	err = cwa.attributeDiffs(ctx, commitIdx, shardMgr, sch, attribData, differ)
+	err = cwa.attributeDiffs(ctx, commitIdx, shardMgr, shard, sch, attribData, differ)
 	if err != nil && err != io.EOF {
 		return nil, err
 	}
@@ -527,6 +538,73 @@ func (cwa CWAttribution) readShardFile(ctx context.Context, shard AttributionSha
 	return attribData, nil
 }
 
+func getRangeSize(ctx context.Context, rowData types.Map, startInc, endExc types.Value) (int64, error) {
+	if rowData.Empty() {
+		return 0, nil
+	}
+
+	var startIdx int64
+	var endIdx int64
+	var err error
+
+	if !types.IsNull(startInc) {
+		startIdx, err = rowData.IndexForKey(ctx, startInc)
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		startIdx = 0
+	}
+
+	if !types.IsNull(endExc) {
+		endIdx, err = rowData.IndexForKey(ctx, endExc)
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		endIdx = int64(rowData.Len())
+	}
+
+	return endIdx - startIdx, nil
+}
+
+func (cwa CWAttribution) getRowSizeChange(ctx context.Context, shard AttributionShard, tbl, prevTbl *doltdb.Table) (int64, error) {
+	var prevRowData types.Map
+	var rowData types.Map
+	var err error
+
+	if tbl != nil {
+		rowData, err = tbl.GetNomsRowData(ctx)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	if prevTbl != nil {
+		prevRowData, err = prevTbl.GetNomsRowData(ctx)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	rangeSize, err := getRangeSize(ctx, rowData, shard.StartInclusive, shard.EndExclusive)
+	if err != nil {
+		return 0, err
+	}
+
+	prevRangeSize, err := getRangeSize(ctx, prevRowData, shard.StartInclusive, shard.EndExclusive)
+	if err != nil {
+		return 0, err
+	}
+
+	change := rangeSize - prevRangeSize
+	if change < 0 {
+		change = -change
+	}
+
+	return change, nil
+}
+
 // getDiffer returns a differs.Differ implementation which encapsulates all the changes.
 func (cwa CWAttribution) getDiffer(ctx context.Context, shard AttributionShard, tbl, prevTbl *doltdb.Table) (schema.Schema, differs.Differ, error) {
 	if prevTbl == nil && tbl == nil {
@@ -545,8 +623,6 @@ func (cwa CWAttribution) getDiffer(ctx context.Context, shard AttributionShard, 
 			return nil, nil, err
 		}
 
-		rowData.IteratorAt()
-		rowData.IteratorFrom()
 		sch, err = tbl.GetSchema(ctx)
 		if err != nil {
 			return nil, nil, err
@@ -587,13 +663,27 @@ func (cwa CWAttribution) getDiffer(ctx context.Context, shard AttributionShard, 
 
 // attributeDiffs loops over the previous attribution and the diffs updating the attribution and sending it to the shard
 // manager to be persisted.
-func (cwa CWAttribution) attributeDiffs(ctx context.Context, commitIdx int16, shardMgr *shardManager, sch schema.Schema, attribData *types.Map, differ differs.Differ) error {
-	var attItr types.MapIterator
+func (cwa CWAttribution) attributeDiffs(ctx context.Context, commitIdx int16, shardMgr *shardManager, shard AttributionShard, sch schema.Schema, attribData *types.Map, differ differs.Differ) error {
+	var attItr types.MapTupleIterator
 	var err error
 
 	// get an iterator for iterating over the existing attribution for the shard.  If there is no attribution gets an empty iterator
 	if attribData != nil {
-		attItr, err = attribData.Iterator(ctx)
+		var rangeStart int64
+		rangeEnd := int64(attribData.Len())
+
+		if !types.IsNull(shard.StartInclusive) {
+			rangeStart, err = attribData.IndexForKey(ctx, shard.StartInclusive)
+			if err != nil {
+				return err
+			}
+		}
+
+		if !types.IsNull(shard.EndExclusive) {
+			rangeEnd, err = attribData.IndexForKey(ctx, shard.EndExclusive)
+		}
+
+		attItr, err = attribData.RangeIterator(ctx, uint64(rangeStart), uint64(rangeEnd))
 
 		if err != nil {
 			return err
@@ -626,10 +716,16 @@ func (cwa CWAttribution) attributeDiffs(ctx context.Context, commitIdx int16, sh
 	for {
 		if attKey == nil {
 			// gets existing attribution data for the next previously attributed row
-			attKey, attVal, err = attItr.Next(ctx)
+			attKeyTpl, attValTpl, err := attItr.NextTuple(ctx)
 
-			if err != nil && err != io.EOF {
-				return err
+			if err != nil {
+				if err != io.EOF {
+					return err
+				}
+				// in the case of io.EOF attKey and attVal are not set
+			} else {
+				attKey = attKeyTpl
+				attVal = attValTpl
 			}
 		}
 
@@ -730,4 +826,96 @@ func (cwa CWAttribution) updateAttFromDiff(ctx context.Context, shardMgr *shardM
 	}
 
 	return shardMgr.addRowAtt(ctx, key, ra, nil)
+}
+
+func getRowData(ctx context.Context, table string, root *doltdb.RootValue) (types.Map, error) {
+	tbl, ok, err := root.GetTable(ctx, table)
+
+	if err != nil {
+		return types.Map{}, err
+	} else if !ok {
+		return types.Map{}, doltdb.ErrTableNotFound
+	}
+
+	return tbl.GetNomsRowData(ctx)
+}
+
+func (cwa CWAttribution) subdivideShard(ctx context.Context, shard AttributionShard, table string, root *doltdb.RootValue, prevRoot *doltdb.RootValue) ([]att.ShardInfo, error) {
+	if cwa.shardParams.SubdivideDiffsSize <= 0 {
+		return []att.ShardInfo{shard}, nil
+	}
+
+	rowData, err := getRowData(ctx, table, root)
+	if err != nil {
+		return nil, err
+	}
+
+	prevRowData, err := getRowData(ctx, table, prevRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	size, err := getRangeSize(ctx, rowData, shard.StartInclusive, shard.EndExclusive)
+	if err != nil {
+		return nil, err
+	}
+
+	prevSize, err := getRangeSize(ctx, prevRowData, shard.StartInclusive, shard.EndExclusive)
+	if err != nil {
+		return nil, err
+	}
+
+	delta := size - prevSize
+	if delta < 0 {
+		delta = -delta
+	}
+
+	if delta <= cwa.shardParams.SubdivideDiffsSize {
+		return []att.ShardInfo{shard}, nil
+	} else {
+		var subDivisions []att.ShardInfo
+		subDivideRows := rowData
+
+		if prevSize > size {
+			subDivideRows = prevRowData
+		}
+
+		numSubs := (delta / cwa.shardParams.SubdivideDiffsSize) + 1
+		subDivisionStep := delta / numSubs
+
+		var startIdx int64
+		if !types.IsNull(shard.StartInclusive) {
+			startIdx, err = subDivideRows.IndexForKey(ctx, shard.StartInclusive)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		start := shard.StartInclusive
+		for i := int64(0); i < numSubs-1; i++ {
+			k, _, err := subDivideRows.At(ctx, uint64(startIdx+subDivisionStep))
+			if err != nil {
+				return nil, err
+			}
+
+			subDivisions = append(subDivisions, AttributionShard{
+				Table:          shard.Table,
+				Path:           shard.Path,
+				StartInclusive: start,
+				EndExclusive:   k,
+			})
+
+			start = k
+			startIdx += subDivisionStep
+		}
+
+		subDivisions = append(subDivisions, AttributionShard{
+			Table:          shard.Table,
+			Path:           shard.Path,
+			StartInclusive: start,
+			EndExclusive:   shard.EndExclusive,
+		})
+
+		return subDivisions, nil
+	}
 }

@@ -147,7 +147,8 @@ func main() {
 	switch *methodStr {
 	case "cellwise":
 		shardParams := cellwise.CWAttShardParams{
-			RowsPerShard: 100_000,
+			RowsPerShard:       100_000,
+			SubdivideDiffsSize: 1_000_000,
 		}
 
 		shardStore, err := att.NewFilesysShardStore(filepath.Join(opts.buildDir, opts.startHash.String()))
