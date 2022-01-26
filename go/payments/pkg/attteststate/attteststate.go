@@ -262,7 +262,7 @@ func genTableState(ctx context.Context, vrw types.ValueReadWriter) ([]tableState
 
 func createTable(ctx context.Context, ddb *doltdb.DoltDB, state tableState) (*doltdb.Table, error) {
 	vrw := ddb.ValueReadWriter()
-	tbl, err := doltdb.NewTable(ctx, vrw, state.sch, state.rowData, nil, nil)
+	tbl, err := doltdb.NewNomsTable(ctx, vrw, state.sch, state.rowData, nil, nil)
 
 	if err != nil {
 		return nil, err
