@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -101,11 +102,11 @@ func assertOnExpectedAttribution(t *testing.T, expected []uint64, summary Cellwi
 	require.Equal(t, expected, summary.CommitCounts)
 }
 
-func createMeta(t *testing.T) [attteststate.NumCommits]*doltdb.CommitMeta {
-	var meta [attteststate.NumCommits]*doltdb.CommitMeta
+func createMeta(t *testing.T) [attteststate.NumCommits]*datas.CommitMeta {
+	var meta [attteststate.NumCommits]*datas.CommitMeta
 	for i := 0; i < attteststate.NumCommits; i++ {
 		var err error
-		meta[i], err = doltdb.NewCommitMeta(testUsername, testEmail, fmt.Sprintf("Commit %d", i))
+		meta[i], err = datas.NewCommitMeta(testUsername, testEmail, fmt.Sprintf("Commit %d", i))
 		require.NoError(t, err)
 	}
 
