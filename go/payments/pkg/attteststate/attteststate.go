@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -271,7 +272,7 @@ func createTable(ctx context.Context, ddb *doltdb.DoltDB, state tableState) (*do
 	return tbl, nil
 }
 
-func createCommit(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, tbl *doltdb.Table, parents []*doltdb.Commit, meta *doltdb.CommitMeta) (*doltdb.RootValue, *doltdb.Commit, error) {
+func createCommit(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, tbl *doltdb.Table, parents []*doltdb.Commit, meta *datas.CommitMeta) (*doltdb.RootValue, *doltdb.Commit, error) {
 	var err error
 	if tbl != nil {
 		root, err = root.PutTable(ctx, TestTableName, tbl)
@@ -296,7 +297,7 @@ func createCommit(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValu
 	return root, cm, nil
 }
 
-func GenTestCommitGraph(ctx context.Context, ddb *doltdb.DoltDB, meta [NumCommits]*doltdb.CommitMeta) (hash.Hash, *doltdb.Commit, error) {
+func GenTestCommitGraph(ctx context.Context, ddb *doltdb.DoltDB, meta [NumCommits]*datas.CommitMeta) (hash.Hash, *doltdb.Commit, error) {
 	states, err := genTableState(ctx, ddb.ValueReadWriter())
 
 	if err != nil {
@@ -327,7 +328,7 @@ func GenTestCommitGraph(ctx context.Context, ddb *doltdb.DoltDB, meta [NumCommit
 		return hash.Hash{}, nil, err
 	}
 
-	createCmMeta, err := doltdb.NewCommitMeta("__user__", "user@fake.horse", "state at start of bounty")
+	createCmMeta, err := datas.NewCommitMeta("__user__", "user@fake.horse", "state at start of bounty")
 
 	if err != nil {
 		return hash.Hash{}, nil, err
