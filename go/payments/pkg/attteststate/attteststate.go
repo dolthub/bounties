@@ -354,8 +354,12 @@ func GenTestCommitGraph(ctx context.Context, ddb *doltdb.DoltDB, meta [NumCommit
 		root, head, err = createCommit(ctx, ddb, root, tbl, []*doltdb.Commit{head, cm}, meta[i])
 	}
 
-	h, err := bountyStart.HashOf()
+	err = ddb.SetHeadToCommit(ctx, ref.NewBranchRef("main"), head)
+	if err != nil {
+		return hash.Hash{}, nil, err
+	}
 
+	h, err := bountyStart.HashOf()
 	if err != nil {
 		return hash.Hash{}, nil, err
 	}
