@@ -288,7 +288,7 @@ func createCommit(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValu
 		return nil, nil, err
 	}
 
-	cm, err := ddb.CommitWithParentCommits(ctx, h, ref.NewBranchRef("main"), parents, meta)
+	cm, err := ddb.CommitDanglingWithParentCommits(ctx, h, parents, meta)
 
 	if err != nil {
 		return nil, nil, err
