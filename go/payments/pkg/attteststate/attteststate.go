@@ -310,7 +310,7 @@ func GenTestCommitGraph(ctx context.Context, ddb *doltdb.DoltDB, meta [NumCommit
 		return hash.Hash{}, nil, err
 	}
 
-	root, err := initialCommit.GetRootValue()
+	root, err := initialCommit.GetRootValue(ctx)
 
 	if err != nil {
 		return hash.Hash{}, nil, err
