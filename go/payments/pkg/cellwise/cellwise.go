@@ -246,14 +246,14 @@ func (cwa CWAttribution) ReadSummary(ctx context.Context, key string) (att.Summa
 
 // CollectShards gathers all the shards that need to be processed
 func (cwa CWAttribution) CollectShards(ctx context.Context, commit, prevCommit *doltdb.Commit, summary att.Summary) ([]att.ShardInfo, error) {
-	root, err := commit.GetRootValue()
+	root, err := commit.GetRootValue(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	var prevRoot *doltdb.RootValue
 	if prevCommit != nil {
-		prevRoot, err = prevCommit.GetRootValue()
+		prevRoot, err = prevCommit.GetRootValue(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -410,14 +410,14 @@ func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, 
 		return nil, err
 	}
 
-	root, err := cm.GetRootValue()
+	root, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	var prevRoot *doltdb.RootValue
 	if prevCm != nil {
-		prevRoot, err = prevCm.GetRootValue()
+		prevRoot, err = prevCm.GetRootValue(ctx)
 		if err != nil {
 			return nil, err
 		}
