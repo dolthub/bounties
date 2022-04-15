@@ -3,7 +3,7 @@ module github.com/dolthub/bounties/go
 go 1.18
 
 require (
-	github.com/dolthub/dolt/go v0.0.0-20220415093901-7bedf2f04d55
+	github.com/dolthub/dolt/go v0.0.0-20220415175543-4dc8959e5149
 	github.com/pkg/profile v1.5.0
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/zap v1.15.0
@@ -21,7 +21,7 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1 // indirect
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078 // indirect
 	github.com/dolthub/fslock v0.0.3 // indirect
-	github.com/dolthub/go-mysql-server v0.11.1-0.20220414235550-f02c7d1f2d66 // indirect
+	github.com/dolthub/go-mysql-server v0.11.1-0.20220415151345-1911dee4b070 // indirect
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66 // indirect
 	github.com/dolthub/vitess v0.0.0-20220411205612-30b631cfdaac // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
@@ -57,15 +57,15 @@ require (
 	go.opencensus.io v0.22.4 // indirect
 	go.uber.org/atomic v1.6.0 // indirect
 	go.uber.org/multierr v1.5.0 // indirect
-	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a // indirect
+	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 // indirect
 	golang.org/x/lint v0.0.0-20201208152925-83fdc39ff7b5 // indirect
-	golang.org/x/mod v0.5.1 // indirect
+	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect
 	golang.org/x/net v0.0.0-20211015210444-4f30a5c0130f // indirect
 	golang.org/x/oauth2 v0.0.0-20200902213428-5d25da1a8d43 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20220111092808-5a964db01320 // indirect
 	golang.org/x/text v0.3.7 // indirect
-	golang.org/x/tools v0.1.9 // indirect
+	golang.org/x/tools v0.1.10 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/api v0.32.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
