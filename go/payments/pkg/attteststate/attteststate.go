@@ -282,11 +282,12 @@ func createCommit(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValu
 		}
 	}
 
-	h, err := ddb.WriteRootValue(ctx, root)
+	r, h, err := ddb.WriteRootValue(ctx, root)
 
 	if err != nil {
 		return nil, nil, err
 	}
+	root = r
 
 	cm, err := ddb.CommitDanglingWithParentCommits(ctx, h, parents, meta)
 
