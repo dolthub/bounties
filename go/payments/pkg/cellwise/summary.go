@@ -70,14 +70,14 @@ type AttributionShard struct {
 }
 
 // inRangeFunc will return a function that validates a key against the end value
-func (as AttributionShard) inRangeFunc(nbf *types.NomsBinFormat) func(v types.Value) (bool, bool, error) {
+func (as AttributionShard) inRangeFunc(ctx context.Context, nbf *types.NomsBinFormat) func(ctx context.Context, v types.Value) (bool, bool, error) {
 	if types.IsNull(as.EndExclusive) {
-		return func(value types.Value) (bool, error) {
+		return func(ctx context.Context, value types.Value) (bool, bool, error) {
 			return true, false, nil
 		}
 	}
 
-	return func(value types.Value) (bool, bool, error) {
+	return func(ctx context.Context, value types.Value) (bool, bool, error) {
 		res, err := value.Less(nbf, as.EndExclusive)
 		return res, false, err
 	}

@@ -65,7 +65,7 @@ type DualMapIter struct {
 }
 
 // Start initializes the iterator to iterate over 2 maps
-func (itr *DualMapIter) Start(ctx context.Context, from, to types.Map, start types.Value, inRange func(types.Value) (bool, error)) {
+func (itr *DualMapIter) Start(ctx context.Context, from, to types.Map, start types.Value, inRange func(context.Context, types.Value) (bool, bool, error)) {
 	itr.ctx = ctx
 	itr.nbf = from.Format()
 
@@ -176,12 +176,12 @@ func (itr *DualMapIter) getDiff() (*diff.Difference, error) {
 }
 
 // inRangeWrapper wraps an "inRange" function so that it may be used with the interface change on noms.ReadRange.
-type inRangeWrapper func(types.Value) (bool, error)
+type inRangeWrapper func(context.Context, types.Value) (bool, bool, error)
 
 var _ noms.InRangeCheck = inRangeWrapper(nil)
 
 // Check implements the interface noms.InRangeCheck.
 func (i inRangeWrapper) Check(ctx context.Context, tuple types.Tuple) (valid bool, skip bool, err error) {
-	ok, err := i(tuple)
+	ok, _, err := i(ctx, tuple)
 	return ok, false, err
 }

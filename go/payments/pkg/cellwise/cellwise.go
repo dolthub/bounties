@@ -651,7 +651,7 @@ func (cwa CWAttribution) getDiffer(ctx context.Context, shard AttributionShard, 
 	}
 
 	eqSchemas := schema.SchemasAreEqual(sch, prevSch)
-	inRangeFunc := shard.inRangeFunc(cwa.ddb.Format())
+	inRangeFunc := shard.inRangeFunc(ctx, cwa.ddb.Format())
 
 	if eqSchemas {
 		differ := diff.NewAsyncDiffer(32)
