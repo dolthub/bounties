@@ -42,6 +42,7 @@ type options struct {
 	buildDir    string
 	profile     string
 	profileHash hash.Hash
+	excludeCols string
 }
 
 func startProfiling(profileType string) func() {
@@ -78,6 +79,7 @@ func main() {
 	buildDir := flag.String("build-dir", "", "directory where build files are output.")
 	profileType := flag.String("profile", "", "options are (cpu,mem,blocking,trace).")
 	profileHashStr := flag.String("profile-hash", "", "commit hash to limit profiling to.")
+	excludeColsStr := flag.String("exclude-cols", "", "comma-separated list of columns to be excluded.")
 	flag.Parse()
 
 	if len(*methodStr) == 0 {
@@ -129,6 +131,7 @@ func main() {
 		buildDir:    absBuildDir,
 		profile:     *profileType,
 		profileHash: profileHash,
+		excludeCols: *excludeColsStr,
 	}
 
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, "")
@@ -161,7 +164,7 @@ func main() {
 			errExit(fmt.Sprintf("Failed to create logger: %s", err.Error()))
 		}
 
-		method = cellwise.NewCWAtt(logger, dEnv.DoltDB, opts.startHash, shardStore, shardParams)
+		method = cellwise.NewCWAtt(logger, dEnv.DoltDB, opts.startHash, opts.excludeCols, shardStore, shardParams)
 	default:
 		errExit(fmt.Sprintf("Unknown --method '%s'", *methodStr))
 	}

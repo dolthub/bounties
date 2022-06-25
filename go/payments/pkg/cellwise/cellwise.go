@@ -19,10 +19,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"go.uber.org/zap"
 	"io"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/dolthub/bounties/go/payments/pkg/att"
 	"github.com/dolthub/bounties/go/payments/pkg/doltutils/differs"
@@ -54,16 +55,18 @@ type CWAttribution struct {
 	ddb         *doltdb.DoltDB
 	logger      *zap.Logger
 	startHash   hash.Hash
+	excludeCols string
 	shardParams CWAttShardParams
 	shardStore  att.ShardStore
 }
 
 // NewCWAtt returns a new CWAttribution object
-func NewCWAtt(logger *zap.Logger, ddb *doltdb.DoltDB, startHash hash.Hash, shardStore att.ShardStore, params CWAttShardParams) CWAttribution {
+func NewCWAtt(logger *zap.Logger, ddb *doltdb.DoltDB, startHash hash.Hash, excludeCols string, shardStore att.ShardStore, params CWAttShardParams) CWAttribution {
 	return CWAttribution{
 		logger:      logger,
 		ddb:         ddb,
 		startHash:   startHash,
+		excludeCols: excludeCols,
 		shardStore:  shardStore,
 		shardParams: params,
 	}
@@ -627,6 +630,10 @@ func (cwa CWAttribution) getDiffer(ctx context.Context, shard AttributionShard, 
 		}
 
 		sch, err = tbl.GetSchema(ctx)
+		cols := sch.GetAllCols()
+		col, _ := cols.GetByName(cwa.excludeCols)
+		cleanedCols := schema.ColCollectionSetDifference(cols, schema.NewColCollection(col))
+		sch, err = schema.SchemaFromCols(cleanedCols)
 		if err != nil {
 			return nil, nil, err
 		}
