@@ -611,6 +611,21 @@ func (cwa CWAttribution) getRowSizeChange(ctx context.Context, shard Attribution
 	return change, nil
 }
 
+func (cwa CWAttribution) filterExcludedCols(sch schema.Schema) schema.Schema {
+	cols := sch.GetAllCols()
+	excludeColsArr := []schema.Column{}
+
+	for _, excludeCol := range strings.Split(cwa.excludeCols, ",") {
+		excludeCol, _ := cols.GetByName(excludeCol)
+		excludeColsArr = append(excludeColsArr, excludeCol)
+	}
+
+	cleanedCols := schema.ColCollectionSetDifference(cols, schema.NewColCollection(excludeColsArr...))
+	sch, _ = schema.SchemaFromCols(cleanedCols)
+
+	return sch
+}
+
 // getDiffer returns a differs.Differ implementation which encapsulates all the changes.
 func (cwa CWAttribution) getDiffer(ctx context.Context, shard AttributionShard, tbl, prevTbl *doltdb.Table) (schema.Schema, differs.Differ, error) {
 	if prevTbl == nil && tbl == nil {
@@ -630,10 +645,7 @@ func (cwa CWAttribution) getDiffer(ctx context.Context, shard AttributionShard, 
 		}
 
 		sch, err = tbl.GetSchema(ctx)
-		cols := sch.GetAllCols()
-		col, _ := cols.GetByName(cwa.excludeCols)
-		cleanedCols := schema.ColCollectionSetDifference(cols, schema.NewColCollection(col))
-		sch, err = schema.SchemaFromCols(cleanedCols)
+		sch = cwa.filterExcludedCols(sch)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -646,6 +658,7 @@ func (cwa CWAttribution) getDiffer(ctx context.Context, shard AttributionShard, 
 		}
 
 		prevSch, err = prevTbl.GetSchema(ctx)
+		prevSch = cwa.filterExcludedCols(prevSch)
 		if err != nil {
 			return nil, nil, err
 		}
