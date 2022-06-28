@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/pkg/profile"
@@ -164,7 +165,7 @@ func main() {
 			errExit(fmt.Sprintf("Failed to create logger: %s", err.Error()))
 		}
 
-		method = cellwise.NewCWAtt(logger, dEnv.DoltDB, opts.startHash, opts.excludeCols, shardStore, shardParams)
+		method = cellwise.NewCWAtt(logger, dEnv.DoltDB, opts.startHash, strings.Split(opts.excludeCols, ","), shardStore, shardParams)
 	default:
 		errExit(fmt.Sprintf("Unknown --method '%s'", *methodStr))
 	}

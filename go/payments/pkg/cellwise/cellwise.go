@@ -55,13 +55,13 @@ type CWAttribution struct {
 	ddb         *doltdb.DoltDB
 	logger      *zap.Logger
 	startHash   hash.Hash
-	excludeCols string
+	excludeCols []string
 	shardParams CWAttShardParams
 	shardStore  att.ShardStore
 }
 
 // NewCWAtt returns a new CWAttribution object
-func NewCWAtt(logger *zap.Logger, ddb *doltdb.DoltDB, startHash hash.Hash, excludeCols string, shardStore att.ShardStore, params CWAttShardParams) CWAttribution {
+func NewCWAtt(logger *zap.Logger, ddb *doltdb.DoltDB, startHash hash.Hash, excludeCols []string, shardStore att.ShardStore, params CWAttShardParams) CWAttribution {
 	return CWAttribution{
 		logger:      logger,
 		ddb:         ddb,
@@ -615,7 +615,7 @@ func (cwa CWAttribution) filterExcludedCols(sch schema.Schema) schema.Schema {
 	cols := sch.GetAllCols()
 	excludeColsArr := []schema.Column{}
 
-	for _, excludeCol := range strings.Split(cwa.excludeCols, ",") {
+	for _, excludeCol := range cwa.excludeCols {
 		excludeCol, _ := cols.GetByName(excludeCol)
 		excludeColsArr = append(excludeColsArr, excludeCol)
 	}
