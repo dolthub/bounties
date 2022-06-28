@@ -99,6 +99,42 @@ func getCellwiseExpected() [][]uint64 {
 	return expected
 }
 
+func getCellwiseExpectedCol4Only() [][]uint64 {
+	var expected [][]uint64
+
+	// Expected Scoreboard:
+	// Commit 1: 0
+	expected = append(expected, []uint64{0})
+
+	// Expected Scoreboard:
+	// Commit 1: 0
+	// Commit 2: 0
+	expected = append(expected, []uint64{0, 0})
+
+	// Expected Scoreboard:
+	// Commit 1: 0
+	// Commit 2: 0
+	// Commit 3: 0
+	expected = append(expected, []uint64{0, 0, 0})
+
+	// Expected Scoreboard:
+	// Commit 1: 0
+	// Commit 2: 0
+	// Commit 3: 0
+	// Commit 4: 100 rows with col4 = 100
+	expected = append(expected, []uint64{0, 0, 0, 100})
+
+	// Expected Scoreboard:
+	// Commit 1: 0
+	// Commit 2: 0
+	// Commit 3: 0
+	// Commit 4: 100
+	// Commit 5: 0
+	expected = append(expected, []uint64{0, 0, 0, 100, 0})
+
+	return expected
+}
+
 func assertOnExpectedAttribution(t *testing.T, expected []uint64, summary CellwiseAttSummary) {
 	require.Equal(t, expected, summary.CommitCounts)
 }
@@ -115,27 +151,37 @@ func createMeta(t *testing.T) [attteststate.NumCommits]*datas.CommitMeta {
 }
 
 func TestAttribution(t *testing.T) {
+	defaultCellwiseExpected := getCellwiseExpected()
+
 	tests := []struct {
 		name        string
 		shardParams CWAttShardParams
+		expected    [][]uint64
+		excludeCols []string
 	}{
 		{
 			"Million rows per shard",
 			CWAttShardParams{
 				RowsPerShard: 1_000_000,
 			},
+			defaultCellwiseExpected,
+			[]string{},
 		},
 		{
 			"100 rows per shard",
 			CWAttShardParams{
 				RowsPerShard: 100,
 			},
+			defaultCellwiseExpected,
+			[]string{},
 		},
 		{
 			"31 rows per shard",
 			CWAttShardParams{
 				RowsPerShard: 31,
 			},
+			defaultCellwiseExpected,
+			[]string{},
 		},
 		{
 			"31 rows per shard, min shard size 11",
@@ -143,6 +189,16 @@ func TestAttribution(t *testing.T) {
 				RowsPerShard:       31,
 				SubdivideDiffsSize: 64,
 			},
+			defaultCellwiseExpected,
+			[]string{},
+		},
+		{
+			"Count `col4` only (Million rows per shard)",
+			CWAttShardParams{
+				RowsPerShard: 1_000_000,
+			},
+			getCellwiseExpectedCol4Only(),
+			[]string{"pk", "col1", "col2", "col3"},
 		},
 	}
 
@@ -155,20 +211,18 @@ func TestAttribution(t *testing.T) {
 			startOfBountyHash, cm, err := attteststate.GenTestCommitGraph(ctx, dEnv.DoltDB, createMeta(t))
 			require.NoError(t, err)
 
-			expected := getCellwiseExpected()
-
 			commits, err := doltutils.GetMergeCommitsAfter(ctx, dEnv.DoltDB, cm, startOfBountyHash)
 			require.NoError(t, err)
 			shardStore, err := att.NewFilesysShardStore(filepath.Join(buildDir, startOfBountyHash.String()))
 			require.NoError(t, err)
 			logger, err := zap.NewDevelopment()
 			require.NoError(t, err)
-			cwAtt := NewCWAtt(logger, dEnv.DoltDB, startOfBountyHash, []string{}, shardStore, test.shardParams)
-			require.Equal(t, len(expected), len(commits))
+			cwAtt := NewCWAtt(logger, dEnv.DoltDB, startOfBountyHash, test.excludeCols, shardStore, test.shardParams)
+			require.Equal(t, len(test.expected), len(commits))
 
 			var summary att.Summary = emptySummary(startOfBountyHash)
 			var prevCommit *doltdb.Commit
-			for i := 0; i < len(expected); i++ {
+			for i := 0; i < len(test.expected); i++ {
 				commit := commits[i]
 				require.NoError(t, err)
 
@@ -219,7 +273,7 @@ func TestAttribution(t *testing.T) {
 				summary, err = cwAtt.ProcessResults(ctx, commitHash, summary, results)
 				require.NoError(t, err)
 
-				expectedAtt := expected[i]
+				expectedAtt := test.expected[i]
 				assertOnExpectedAttribution(t, expectedAtt, summary.(CellwiseAttSummary))
 
 				summaryKey, err := cwAtt.WriteSummary(ctx, summary)
