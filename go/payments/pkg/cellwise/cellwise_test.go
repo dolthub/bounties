@@ -162,7 +162,7 @@ func TestAttribution(t *testing.T) {
 			require.NoError(t, err)
 			logger, err := zap.NewDevelopment()
 			require.NoError(t, err)
-			cwAtt := NewCWAtt(logger, dEnv.DoltDB, startOfBountyHash, shardStore, test.shardParams)
+			cwAtt := NewCWAtt(logger, dEnv.DoltDB, startOfBountyHash, "", shardStore, test.shardParams)
 			require.Equal(t, len(expected), len(commits))
 
 			var summary att.Summary = emptySummary(startOfBountyHash)
