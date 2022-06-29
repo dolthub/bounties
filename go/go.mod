@@ -3,7 +3,7 @@ module github.com/dolthub/bounties/go
 go 1.18
 
 require (
-	github.com/dolthub/dolt/go v0.40.5-0.20220628210725-273937e43031
+	github.com/dolthub/dolt/go v0.40.5-0.20220629162932-35446e675b09
 	github.com/pkg/profile v1.5.0
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/zap v1.15.0
@@ -14,7 +14,6 @@ require (
 	cloud.google.com/go/storage v1.12.0 // indirect
 	git.sr.ht/~sbinet/gg v0.3.1 // indirect
 	github.com/HdrHistogram/hdrhistogram-go v1.0.0 // indirect
-	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
 	github.com/ajstarks/svgo v0.0.0-20211024235047-1546f124cd8b // indirect
 	github.com/aws/aws-sdk-go v1.32.6 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
@@ -49,13 +48,11 @@ require (
 	github.com/lestrrat-go/strftime v1.0.4 // indirect
 	github.com/mattn/go-colorable v0.1.7 // indirect
 	github.com/mattn/go-isatty v0.0.12 // indirect
-	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/mitchellh/hashstructure v1.1.0 // indirect
 	github.com/oliveagle/jsonpath v0.0.0-20180606110733-2e52cf6e6852 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/rivo/uniseg v0.1.0 // indirect
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/silvasur/buzhash v0.0.0-20160816060738-9bdec3dec7c6 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
