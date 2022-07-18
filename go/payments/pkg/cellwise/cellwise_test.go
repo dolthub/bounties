@@ -51,7 +51,6 @@ func getTestEnv(ctx context.Context, t *testing.T) *env.DoltEnv {
 	hdp := func() (string, error) { return homeDir, nil }
 	fs := filesys.NewInMemFS([]string{testDir}, nil, testDir)
 	dEnv := env.Load(ctx, hdp, fs, doltdb.InMemDoltDB, "")
-	require.NoError(t, dEnv.DocsLoadErr)
 	require.NoError(t, dEnv.DBLoadError)
 	require.NoError(t, dEnv.CfgLoadErr)
 	require.Error(t, dEnv.RSLoadErr)

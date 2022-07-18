@@ -137,8 +137,6 @@ func main() {
 		errExit(fmt.Sprintf("Failed to load dolt configuration: %v", dEnv.CfgLoadErr))
 	} else if dEnv.DBLoadError != nil {
 		errExit(fmt.Sprintf("Failed to load dolt database: %v", dEnv.DBLoadError))
-	} else if dEnv.DocsLoadErr != nil {
-		errExit(fmt.Sprintf("Failed to load docs: %v", dEnv.DocsLoadErr))
 	} else if dEnv.RSLoadErr != nil {
 		errExit(fmt.Sprintf("Failed to load dolt repo state: %v", dEnv.RSLoadErr))
 	}
