@@ -1,6 +1,6 @@
 module github.com/dolthub/bounties/go
 
-go 1.18
+go 1.19
 
 require (
 	github.com/dolthub/dolt/go v0.40.5-0.20220804175800-1c0a6b0835ff
