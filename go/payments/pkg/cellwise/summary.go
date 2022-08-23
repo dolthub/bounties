@@ -17,10 +17,11 @@ package cellwise
 import (
 	"context"
 	"errors"
-	"github.com/dolthub/dolt/go/store/marshal"
-	"github.com/dolthub/dolt/go/store/valuefile"
 	"io"
 	"reflect"
+
+	"github.com/dolthub/dolt/go/store/marshal"
+	"github.com/dolthub/dolt/go/store/valuefile"
 
 	"github.com/dolthub/bounties/go/payments/pkg/att"
 
@@ -148,7 +149,7 @@ type CellwiseAttSummary struct {
 	// last element in the slice
 	CommitHashes []hash.Hash `noms:"commit_hashes" json:"commit_hashes"`
 	// CommitCounts provides the number of cellwise attribution changes that are attributed to each of the commits.
-	CommitCounts []uint64 `noms:"commit_counts" json:"commit_counts"'`
+	CommitCounts []uint64 `noms:"commit_counts" json:"commit_counts"`
 	// TableShards tracks the AttributionShard for each table used to build attribution
 	TableShards map[string][]AttributionShard `noms:"table_to_shards" json:"table_to_shard"`
 }

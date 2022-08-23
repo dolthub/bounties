@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -88,7 +87,7 @@ var sharedPool = pool.NewBuffPool()
 func prollyGenTableState(ctx context.Context, ns tree.NodeStore) ([]tableState, error) {
 	var states []tableState
 
-	kd, vd := shim.MapDescriptorsFromSchema(AttSch)
+	kd, vd := AttSch.GetMapDescriptors()
 	m, err := prolly.NewMapFromTuples(ctx, ns, kd, vd)
 	if err != nil {
 		return nil, err
@@ -223,7 +222,7 @@ func prollyGenTableState(ctx context.Context, ns tree.NodeStore) ([]tableState, 
 
 	// ========== STATE 4 ==========
 	// *** schema updated
-	kd2, vd2 := shim.MapDescriptorsFromSchema(UpdatedSch)
+	kd2, vd2 := UpdatedSch.GetMapDescriptors()
 	kb2, vb2 := val.NewTupleBuilder(kd), val.NewTupleBuilder(vd)
 
 	// create new map with old values from col1 and col2
@@ -531,7 +530,7 @@ func createCommit(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValu
 func GenTestCommitGraph(ctx context.Context, ddb *doltdb.DoltDB, meta [NumCommits]*datas.CommitMeta) (hash.Hash, *doltdb.Commit, error) {
 	var states []tableState
 	var err error
-	if types.IsFormat_DOLT_1(ddb.Format()) {
+	if types.IsFormat_DOLT(ddb.Format()) {
 		states, err = prollyGenTableState(ctx, ddb.NodeStore())
 	} else {
 		states, err = nomsGenTableState(ctx, ddb.ValueReadWriter(), ddb.NodeStore())
