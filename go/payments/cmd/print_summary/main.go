@@ -18,11 +18,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
+
 	"github.com/dolthub/bounties/go/payments/pkg/cellwise"
 	"github.com/dolthub/dolt/go/store/marshal"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/valuefile"
-	"os"
 )
 
 func errExit(message string) {
@@ -45,7 +46,7 @@ func main() {
 
 	switch *methodStr {
 	case "cellwise":
-		vals, err := valuefile.ReadValueFile(ctx, *summaryFile)
+		vf, err := valuefile.ReadValueFile(ctx, *summaryFile)
 		if os.IsNotExist(err) {
 			errExit(fmt.Sprintf("'%s' does not exist\n", *summaryFile))
 		} else if err != nil {
@@ -53,7 +54,7 @@ func main() {
 		}
 
 		var summary cellwise.CellwiseAttSummary
-		err = marshal.Unmarshal(ctx, types.Format_Default, vals[0], &summary)
+		err = marshal.Unmarshal(ctx, types.Format_Default, vf.Values[0], &summary)
 		if err != nil {
 			errExit(fmt.Sprintf("Failed to unmarshall '%s': %v\n", *summaryFile, err))
 		}

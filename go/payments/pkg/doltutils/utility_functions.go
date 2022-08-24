@@ -16,9 +16,11 @@ package doltutils
 
 import (
 	"context"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -122,4 +124,27 @@ func GetMergeCommitsBetween(ctx context.Context, db *doltdb.DoltDB, start, end h
 	}
 
 	return GetMergeCommitsAfter(ctx, db, cm, start)
+}
+
+// gets the lists of tables that are scored.  This filters out any tables with the prefix dolt_
+func GetScoredTables(ctx context.Context, additonalNames []string, root *doltdb.RootValue) ([]string, error) {
+	tableNames, err := root.GetTableNames(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	unique := set.NewStrSet(tableNames)
+	unique.Add(additonalNames...)
+
+	scoredTables := make([]string, 0, unique.Size())
+	unique.Iterate(func(s string) (cont bool) {
+		if !strings.HasPrefix(strings.ToLower(s), "dolt_") {
+			scoredTables = append(scoredTables, s)
+		}
+
+		return true
+	})
+
+	return scoredTables, nil
 }

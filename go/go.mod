@@ -87,4 +87,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.0 // indirect
 )
 
+replace github.com/dolthub/dolt/go => ../../dolt/go
+
 replace github.com/google/flatbuffers => github.com/dolthub/flatbuffers v1.13.0-dh.1

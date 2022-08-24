@@ -30,15 +30,15 @@ import (
 )
 
 func deserializeShard(ctx context.Context, nbf *types.NomsBinFormat, rd io.Reader) (AttributionShard, error) {
-	vals, err := valuefile.ReadFromReader(ctx, rd)
+	vf, err := valuefile.ReadFromReader(ctx, rd)
 	if err != nil {
 		return AttributionShard{}, err
-	} else if len(vals) != 1 {
+	} else if len(vf.Values) != 1 {
 		return AttributionShard{}, errors.New("corrupt shard info")
 	}
 
 	var shard AttributionShard
-	err = marshal.Unmarshal(ctx, nbf, vals[0], &shard)
+	err = marshal.Unmarshal(ctx, nbf, vf.Values[0], &shard)
 	if err != nil {
 		return AttributionShard{}, err
 	}

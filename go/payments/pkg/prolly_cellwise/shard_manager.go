@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cellwise
+package prolly_cellwise
 
 import (
 	"context"
@@ -20,53 +20,58 @@ import (
 	"time"
 
 	"github.com/dolthub/bounties/go/payments/pkg/att"
-	"go.uber.org/zap"
-
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/dolt/go/store/valuefile"
+	"go.uber.org/zap"
 )
 
-type addRowParams struct {
-	key   types.Value
-	raVal types.Value
-	ra    rowAtt
+type prollyAddRowParams struct {
+	key   val.Tuple
+	raVal val.Tuple
+	ra    prollyRowAtt
 }
 
-type attQueue struct {
-	attVals []addRowParams
+type prollyAttQueue struct {
+	attVals []prollyAddRowParams
 	head    int
 	tail    int
 	size    int
 	maxSize int
 }
 
-func newAttQueue(maxSize int) *attQueue {
-	return &attQueue{make([]addRowParams, maxSize), 0, 0, 0, maxSize}
+func newprollyAttQueue(maxSize int) *prollyAttQueue {
+	return &prollyAttQueue{make([]prollyAddRowParams, maxSize), 0, 0, 0, maxSize}
 }
 
-func (q *attQueue) Size() int {
+func (q *prollyAttQueue) Size() int {
 	return q.size
 }
 
-func (q *attQueue) Full() bool {
+func (q *prollyAttQueue) Full() bool {
 	return q.size == q.maxSize
 }
 
-func (q *attQueue) Empty() bool {
+func (q *prollyAttQueue) Empty() bool {
 	return q.size == 0
 }
 
-func (q *attQueue) Push(key, val types.Value, ra rowAtt) {
+func (q *prollyAttQueue) Push(key, val val.Tuple, ra prollyRowAtt) {
 	if q.Full() {
 		panic("full")
 	}
 
-	q.attVals[q.head] = addRowParams{key: key, raVal: val, ra: ra}
+	q.attVals[q.head] = prollyAddRowParams{key: key, raVal: val, ra: ra}
 	q.head = (q.head + 1) % q.maxSize
 	q.size++
 }
 
-func (q *attQueue) Pop() *addRowParams {
+func (q *prollyAttQueue) Pop() *prollyAddRowParams {
 	if q.Empty() {
 		return nil
 	}
@@ -78,7 +83,7 @@ func (q *attQueue) Pop() *addRowParams {
 	return &arp
 }
 
-func (q *attQueue) PeekKey() types.Value {
+func (q *prollyAttQueue) PeekKey() val.Tuple {
 	if q.Empty() {
 		return nil
 	}
@@ -86,60 +91,62 @@ func (q *attQueue) PeekKey() types.Value {
 	return q.attVals[q.tail].key
 }
 
-// shardManager manages writing of output shards
-type shardManager struct {
+// prollyShardManager manages writing of output shards
+type prollyShardManager struct {
 	logger        *zap.Logger
 	nbf           *types.NomsBinFormat
 	shardBasePath string
+	kb            *val.TupleBuilder
+	attVb         *val.TupleBuilder
+	pool          pool.BuffPool
 	shardStore    att.ShardStore
-	shardParams   CWAttShardParams
+	shardParams   ProllyAttShardParams
 	table         string
 	inputShard    AttributionShard
 	numCommits    int
-	rowAttBuff    *rowAttEncodingBuffers
 
-	startKey      types.Value
+	startKey      val.Tuple
 	currStore     *valuefile.FileValueStore
+	nodeStore     tree.NodeStore
 	rowsBufferred int
-	aQ            *attQueue
-	streamMapCh   chan types.Value
-	outMap        *types.StreamingMap
+	aQ            *prollyAttQueue
+	mut           prolly.MutableMap
 	commitCounts  []uint64
 
 	shards []AttributionShard
 }
 
-// NewShardManager takes an input shard, a ShardStore, some ShardParams and some other metadata and returns a shardManager
+// NewProllyShardManager takes an input shard, a ShardStore, some ShardParams and some other metadata and returns a prollyShardManager
 // which is used to manage dynamic sharding, and persisting of shard data
-func NewShardManager(logger *zap.Logger, nbf *types.NomsBinFormat, numCommits int, inputShard AttributionShard, table, shardBasePath string, shardParams CWAttShardParams, shardStore att.ShardStore) *shardManager {
-	return &shardManager{
+func NewProllyShardManager(logger *zap.Logger, nbf *types.NomsBinFormat, numCommits int, inputShard AttributionShard, table, shardBasePath string, tableSch schema.Schema, shardParams ProllyAttShardParams, shardStore att.ShardStore) *prollyShardManager {
+	_, vd := getAttribDescriptorsFromTblSchema(tableSch)
+	attVb := val.NewTupleBuilder(vd)
+	return &prollyShardManager{
 		logger:        logger,
 		nbf:           nbf,
 		table:         table,
 		inputShard:    inputShard,
 		numCommits:    numCommits,
-		rowAttBuff:    NewRowAttEncodingBuffers(),
 		shardBasePath: shardBasePath,
+		kb:            val.NewTupleBuilder(tableSch.GetKeyDescriptor()),
+		pool:          pool.NewBuffPool(),
+		attVb:         attVb,
 		shardStore:    shardStore,
 		shardParams:   shardParams,
-		aQ:            newAttQueue(shardParams.RowsPerShard),
+		aQ:            newprollyAttQueue(shardParams.RowsPerShard),
 	}
 }
 
 // returns the output shards
-func (sm *shardManager) getShards() []AttributionShard {
+func (sm *prollyShardManager) getShards() []AttributionShard {
 	return sm.shards
 }
 
 // add an attributed row to the current shard being built
-func (sm *shardManager) addRowAtt(ctx context.Context, key types.Value, ra rowAtt, raVal types.Value) error {
+func (sm *prollyShardManager) addRowAtt(ctx context.Context, key val.Tuple, ra prollyRowAtt, raVal val.Tuple) error {
 	// if necessary encode the row attribution data as a noms value
 	if raVal == nil {
-		var err error
-		raVal, err = ra.AsValue(sm.nbf, sm.rowAttBuff)
-		if err != nil {
-			return err
-		}
+		raVal = ra.asTuple(sm.attVb, sm.pool)
 	}
 
 	sm.aQ.Push(key, raVal, ra)
@@ -162,29 +169,35 @@ func (sm *shardManager) addRowAtt(ctx context.Context, key types.Value, ra rowAt
 	}
 
 	toMove := (sm.aQ.Size() - sm.rowsBufferred + 1) / 2
-	sm.popQueuedRowsToShard(toMove)
+	err := sm.popQueuedRowsToShard(ctx, toMove)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func (sm *shardManager) popQueuedRowsToShard(toMove int) {
+func (sm *prollyShardManager) popQueuedRowsToShard(ctx context.Context, toMove int) error {
 	for i := 0; i < toMove; i++ {
 		arp := sm.aQ.Pop()
-		sm.streamMapCh <- arp.key
-		sm.streamMapCh <- arp.raVal
+		err := sm.mut.Put(ctx, arp.key, arp.raVal)
+		if err != nil {
+			return err
+		}
 
-		for _, ca := range arp.ra {
-			if ca.CurrentOwner != -1 {
-				sm.commitCounts[ca.CurrentOwner]++
+		for _, currOwner := range arp.ra {
+			if currOwner != nil {
+				sm.commitCounts[*currOwner]++
 			}
 		}
 	}
 
 	sm.rowsBufferred += toMove
+	return nil
 }
 
 // called when all attribution is done for the input shard
-func (sm *shardManager) close(ctx context.Context) error {
+func (sm *prollyShardManager) close(ctx context.Context) error {
 	remaining := sm.aQ.Size() + sm.rowsBufferred
 
 	// If the total number of rows between the buffered shard and the queue is greater than the shard cut off then cut the
@@ -205,12 +218,16 @@ func (sm *shardManager) close(ctx context.Context) error {
 		}
 	}
 
-	sm.popQueuedRowsToShard(sm.aQ.Size())
+	err := sm.popQueuedRowsToShard(ctx, sm.aQ.Size())
+	if err != nil {
+		return err
+	}
+
 	return sm.closeCurrentShard(ctx, sm.inputShard.EndExclusive)
 }
 
 // finalizes an output shard and persists it.
-func (sm *shardManager) closeCurrentShard(ctx context.Context, end types.Value) error {
+func (sm *prollyShardManager) closeCurrentShard(ctx context.Context, end val.Tuple) error {
 	if sm.rowsBufferred > 0 {
 		start := time.Now()
 		sm.logger.Info("closing and persisting shard")
@@ -218,17 +235,11 @@ func (sm *shardManager) closeCurrentShard(ctx context.Context, end types.Value) 
 			sm.logger.Info("closed shard", zap.Duration("took", time.Since(start)))
 		}()
 
-		// close the streaming map and get the types.Map which we will persist
-		close(sm.streamMapCh)
-		m, err := sm.outMap.Wait()
+		m, err := sm.mut.Map(ctx)
 		if err != nil {
 			return err
 		}
-
-		_, err = sm.currStore.WriteValue(ctx, m)
-		if err != nil {
-			return err
-		}
+		v := shim.ValueFromMap(m)
 
 		// if this is the first output shard, maintain the starting key from the input shard.
 		startKey := sm.startKey
@@ -236,14 +247,9 @@ func (sm *shardManager) closeCurrentShard(ctx context.Context, end types.Value) 
 			startKey = sm.inputShard.StartInclusive
 		}
 
-		// Create copies of start and end key tuples so larger objects are able to be cleaned up.
-		if !types.IsNull(startKey) {
-			startKey = startKey.(types.Tuple).CopyOf(nil)
-		}
-
-		if !types.IsNull(end) {
-			end = end.(types.Tuple).CopyOf(nil)
-		}
+		// TODO (dhruv): Should |startKey| and |end| be copied here? There was a
+		// comment describing on how the types.Values needed to copied to allow
+		// garbage collection on large objects.
 
 		shard := AttributionShard{
 			Table:          sm.table,
@@ -254,7 +260,7 @@ func (sm *shardManager) closeCurrentShard(ctx context.Context, end types.Value) 
 
 		// persist to shard store
 		path := sm.shardStore.Join(sm.shardBasePath, shard.Key(sm.nbf))
-		err = sm.shardStore.WriteShard(ctx, path, sm.currStore, m)
+		err = sm.shardStore.WriteShard(ctx, path, sm.currStore, v)
 		if err != nil {
 			return err
 		}
@@ -265,8 +271,6 @@ func (sm *shardManager) closeCurrentShard(ctx context.Context, end types.Value) 
 		sm.startKey = nil
 		sm.currStore = nil
 		sm.rowsBufferred = 0
-		sm.streamMapCh = nil
-		sm.outMap = nil
 		sm.commitCounts = nil
 	}
 
@@ -275,7 +279,7 @@ func (sm *shardManager) closeCurrentShard(ctx context.Context, end types.Value) 
 
 // create a new chunk store and streaming map in order to be able to stream row attribution values to the map containing
 // sharded attribution ddata
-func (sm *shardManager) openNewShard(ctx context.Context, startKey types.Value) error {
+func (sm *prollyShardManager) openNewShard(ctx context.Context, startKey val.Tuple) error {
 	if sm.rowsBufferred != 0 {
 		return errors.New("opening new shard while previous shard not closed")
 	}
@@ -285,9 +289,14 @@ func (sm *shardManager) openNewShard(ctx context.Context, startKey types.Value) 
 	if err != nil {
 		return err
 	}
+	sm.nodeStore = tree.NewNodeStore(sm.currStore)
 
-	sm.streamMapCh = make(chan types.Value, 128)
-	sm.outMap = types.NewStreamingMap(ctx, sm.currStore, sm.streamMapCh)
+	m, err := prolly.NewMapFromTuples(ctx, sm.nodeStore, sm.kb.Desc, sm.attVb.Desc)
+	if err != nil {
+		return err
+	}
+
+	sm.mut = m.Mutate()
 	sm.startKey = startKey
 	sm.commitCounts = make([]uint64, sm.numCommits)
 

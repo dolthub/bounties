@@ -19,10 +19,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"go.uber.org/zap"
 	"io"
-	"strings"
 	"time"
+
+	"github.com/dolthub/bounties/go/payments/pkg/doltutils"
+	"go.uber.org/zap"
 
 	"github.com/dolthub/bounties/go/payments/pkg/att"
 	"github.com/dolthub/bounties/go/payments/pkg/doltutils/differs"
@@ -30,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	diff2 "github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/marshal"
@@ -103,15 +103,15 @@ func (cwa CWAttribution) SerializeResults(ctx context.Context, results att.Shard
 // DeserializeResults takes a []byte and deserializes it ta a ShardResult
 func (cwa CWAttribution) DeserializeResults(ctx context.Context, data []byte) (att.ShardResult, error) {
 	buf := bytes.NewBuffer(data)
-	vals, err := valuefile.ReadFromReader(ctx, buf)
+	vf, err := valuefile.ReadFromReader(ctx, buf)
 	if err != nil {
 		return AttributionShard{}, err
-	} else if len(vals) != 1 {
+	} else if len(vf.Values) != 1 {
 		return AttributionShard{}, errors.New("corrupt shard info")
 	}
 
 	var results []AttributionShard
-	err = marshal.Unmarshal(ctx, cwa.ddb.Format(), vals[0], &results)
+	err = marshal.Unmarshal(ctx, cwa.ddb.Format(), vf.Values[0], &results)
 	if err != nil {
 		return nil, err
 	}
@@ -216,13 +216,13 @@ func (cwa CWAttribution) WriteSummary(ctx context.Context, summary att.Summary) 
 
 // ReadSummary reads a summary for a commit hash
 func (cwa CWAttribution) ReadSummary(ctx context.Context, key string) (att.Summary, error) {
-	val, err := cwa.shardStore.ReadShard(ctx, key)
+	memShard, err := cwa.shardStore.ReadShard(ctx, key)
 	if err != nil {
 		return nil, err
 	}
 
 	var summary CellwiseAttSummary
-	err = marshal.Unmarshal(ctx, cwa.ddb.Format(), val, &summary)
+	err = marshal.Unmarshal(ctx, cwa.ddb.Format(), memShard.Value, &summary)
 	if err != nil {
 		return nil, err
 	}
@@ -274,8 +274,7 @@ func (cwa CWAttribution) collectShards(ctx context.Context, summary CellwiseAttS
 		cwa.logger.Info("collecting shards", zap.String("summary", string(jsonData)))
 	}
 
-	tables, err := cwa.getScoredTables(ctx, summary, root)
-
+	tables, err := doltutils.GetScoredTables(ctx, summary.tableNames(), root)
 	if err != nil {
 		return nil, err
 	}
@@ -352,7 +351,7 @@ func (cwa CWAttribution) shardsHaveDiffs(ctx context.Context, shards []Attributi
 				return nil, err
 			}
 
-			_, differ, err := cwa.getDiffer(ctx, shard, tbl, prevTbl)
+			_, differ, err := getDiffer(ctx, shard, tbl, prevTbl)
 			if err != nil {
 				return nil, err
 			}
@@ -367,30 +366,6 @@ func (cwa CWAttribution) shardsHaveDiffs(ctx context.Context, shards []Attributi
 	}
 
 	return hasDiffs, err
-}
-
-// gets the lists of tables that are scored.  This filters out any tables with the prefix dolt_
-func (cwa CWAttribution) getScoredTables(ctx context.Context, summary CellwiseAttSummary, root *doltdb.RootValue) ([]string, error) {
-	tableNames, err := root.GetTableNames(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	unique := set.NewStrSet(tableNames)
-	summaryTableNames := summary.tableNames()
-	unique.Add(summaryTableNames...)
-
-	scoredTables := make([]string, 0, unique.Size())
-	unique.Iterate(func(s string) (cont bool) {
-		if !strings.HasPrefix(strings.ToLower(s), "dolt_") {
-			scoredTables = append(scoredTables, s)
-		}
-
-		return true
-	})
-
-	return scoredTables, nil
 }
 
 // ProcessShard processes a single shard
@@ -446,7 +421,7 @@ func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, 
 
 	nbf := cwa.ddb.Format()
 
-	sch, differ, err := cwa.getDiffer(ctx, shard, tbl, prevTbl)
+	sch, differ, err := getDiffer(ctx, shard, tbl, prevTbl)
 	if err != nil {
 		return nil, err
 	}
@@ -528,12 +503,12 @@ func (cwa CWAttribution) readShardFile(ctx context.Context, shard AttributionSha
 		cwa.logger.Info("Reading shard", zap.String("shard_key", shardKey), zap.Duration("took", time.Since(start)))
 	}()
 
-	val, err := cwa.shardStore.ReadShard(ctx, shard.Path)
+	memShard, err := cwa.shardStore.ReadShard(ctx, shard.Path)
 	if err != nil {
 		return types.Map{}, err
 	}
 
-	attribData, ok := val.(types.Map)
+	attribData, ok := memShard.Value.(types.Map)
 	if !ok {
 		return types.Map{}, valuefile.ErrCorruptNVF // Not the type of value we expect
 	}
@@ -571,45 +546,8 @@ func getRangeSize(ctx context.Context, rowData types.Map, startInc, endExc types
 	return endIdx - startIdx, nil
 }
 
-func (cwa CWAttribution) getRowSizeChange(ctx context.Context, shard AttributionShard, tbl, prevTbl *doltdb.Table) (int64, error) {
-	var prevRowData types.Map
-	var rowData types.Map
-	var err error
-
-	if tbl != nil {
-		rowData, err = tbl.GetNomsRowData(ctx)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	if prevTbl != nil {
-		prevRowData, err = prevTbl.GetNomsRowData(ctx)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	rangeSize, err := getRangeSize(ctx, rowData, shard.StartInclusive, shard.EndExclusive)
-	if err != nil {
-		return 0, err
-	}
-
-	prevRangeSize, err := getRangeSize(ctx, prevRowData, shard.StartInclusive, shard.EndExclusive)
-	if err != nil {
-		return 0, err
-	}
-
-	change := rangeSize - prevRangeSize
-	if change < 0 {
-		change = -change
-	}
-
-	return change, nil
-}
-
 // getDiffer returns a differs.Differ implementation which encapsulates all the changes.
-func (cwa CWAttribution) getDiffer(ctx context.Context, shard AttributionShard, tbl, prevTbl *doltdb.Table) (schema.Schema, differs.Differ, error) {
+func getDiffer(ctx context.Context, shard AttributionShard, tbl, prevTbl *doltdb.Table) (schema.Schema, differs.Differ, error) {
 	if prevTbl == nil && tbl == nil {
 		panic("how")
 	}
@@ -619,6 +557,7 @@ func (cwa CWAttribution) getDiffer(ctx context.Context, shard AttributionShard, 
 	var prevRowData types.Map
 	var sch schema.Schema
 	var rowData types.Map
+	var format *types.NomsBinFormat
 
 	if tbl != nil {
 		rowData, err = tbl.GetNomsRowData(ctx)
@@ -630,6 +569,8 @@ func (cwa CWAttribution) getDiffer(ctx context.Context, shard AttributionShard, 
 		if err != nil {
 			return nil, nil, err
 		}
+
+		format = rowData.Format()
 	}
 
 	if prevTbl != nil {
@@ -642,16 +583,18 @@ func (cwa CWAttribution) getDiffer(ctx context.Context, shard AttributionShard, 
 		if err != nil {
 			return nil, nil, err
 		}
+
+		format = rowData.Format()
 	}
 
 	if prevTbl == nil {
-		return sch, differs.NewMapRowsAsDiffs(ctx, cwa.ddb.Format(), types.DiffChangeAdded, rowData, shard.StartInclusive, shard.EndExclusive), nil
+		return sch, differs.NewMapRowsAsDiffs(ctx, rowData.Format(), types.DiffChangeAdded, rowData, shard.StartInclusive, shard.EndExclusive), nil
 	} else if tbl == nil {
-		return nil, differs.NewMapRowsAsDiffs(ctx, cwa.ddb.Format(), types.DiffChangeRemoved, prevRowData, shard.StartInclusive, shard.EndExclusive), nil
+		return nil, differs.NewMapRowsAsDiffs(ctx, prevRowData.Format(), types.DiffChangeRemoved, prevRowData, shard.StartInclusive, shard.EndExclusive), nil
 	}
 
 	eqSchemas := schema.SchemasAreEqual(sch, prevSch)
-	inRangeFunc := shard.inRangeFunc(ctx, cwa.ddb.Format())
+	inRangeFunc := shard.inRangeFunc(ctx, format)
 
 	if eqSchemas {
 		differ := diff.NewAsyncDiffer(32)
