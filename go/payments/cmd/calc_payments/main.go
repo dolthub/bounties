@@ -208,7 +208,7 @@ func calcAttribution(ctx context.Context, method att.AttributionMethod, ddb *dol
 		summary = method.EmptySummary(ctx)
 	}
 
-	fmt.Println("Processing", len(mergeCommits), "merge commits.")
+	fmt.Println("Processing", len(mergeCommits)-prevCommitIdx-1, "merge commits.")
 	for commitIdx := prevCommitIdx + 1; commitIdx < len(mergeCommits); commitIdx++ {
 		start := time.Now()
 
@@ -253,10 +253,13 @@ func calcAttribution(ctx context.Context, method att.AttributionMethod, ddb *dol
 			return err
 		}
 
-		printSummaryInfo(ctx, summary, mergeCommits[:commitIdx+1], time.Since(start))
+		printSummaryInfo(ctx, summary, mergeCommits[:commitIdx+1])
+		fmt.Printf("Processed commit %s (%d/%d) in %s\n", commitHash.String(), commitIdx+1, len(mergeCommits), time.Since(start))
 
 		prevCommit = commit
 	}
+
+	fmt.Println("Done!")
 
 	return nil
 }
@@ -282,7 +285,7 @@ func readLatestSummary(ctx context.Context, method att.AttributionMethod, mergeC
 	return -1, nil, nil
 }
 
-func printSummaryInfo(ctx context.Context, summary att.Summary, commits []*doltdb.Commit, elapsed time.Duration) {
+func printSummaryInfo(ctx context.Context, summary att.Summary, commits []*doltdb.Commit) {
 	commitToCount, err := summary.CommitToCount(ctx)
 	if err != nil {
 		panic(err)
@@ -302,8 +305,6 @@ func printSummaryInfo(ctx context.Context, summary att.Summary, commits []*doltd
 
 		fmt.Printf("%02d. %s: %d\n", i, h.String(), count)
 	}
-
-	fmt.Printf("Built it %d ms\n", elapsed.Milliseconds())
 }
 
 func validateDirectory(dir string) (string, error) {
