@@ -16,50 +16,19 @@ package cellwise
 
 import (
 	"context"
-	"fmt"
-	"go.uber.org/zap"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 
 	"github.com/dolthub/bounties/go/payments/pkg/att"
 	"github.com/dolthub/bounties/go/payments/pkg/attteststate"
 	"github.com/dolthub/bounties/go/payments/pkg/doltutils"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/types"
 )
-
-const (
-	testUsername = "Test User"
-	testEmail    = "test@fake.horse"
-)
-
-func getTestEnv(ctx context.Context, t *testing.T) *env.DoltEnv {
-	const (
-		homeDir         = "/Users/madam"
-		relativeTestDir = "databases/test"
-	)
-
-	testDir := filepath.Join(homeDir, relativeTestDir)
-	hdp := func() (string, error) { return homeDir, nil }
-	fs := filesys.NewInMemFS([]string{testDir}, nil, testDir)
-	dEnv := env.Load(ctx, hdp, fs, doltdb.InMemDoltDB, "")
-	require.NoError(t, dEnv.DBLoadError)
-	require.NoError(t, dEnv.CfgLoadErr)
-	require.Error(t, dEnv.RSLoadErr)
-
-	err := dEnv.InitDBAndRepoState(ctx, types.Format_Default, testUsername, testEmail, "main", time.Now())
-	require.NoError(t, err)
-
-	return dEnv
-}
 
 func getCellwiseExpected() [][]uint64 {
 	var expected [][]uint64
@@ -101,17 +70,6 @@ func assertOnExpectedAttribution(t *testing.T, expected []uint64, summary Cellwi
 	require.Equal(t, expected, summary.CommitCounts)
 }
 
-func createMeta(t *testing.T) [attteststate.NumCommits]*datas.CommitMeta {
-	var meta [attteststate.NumCommits]*datas.CommitMeta
-	for i := 0; i < attteststate.NumCommits; i++ {
-		var err error
-		meta[i], err = datas.NewCommitMeta(testUsername, testEmail, fmt.Sprintf("Commit %d", i))
-		require.NoError(t, err)
-	}
-
-	return meta
-}
-
 func TestAttribution(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -149,8 +107,8 @@ func TestAttribution(t *testing.T) {
 			ctx := context.Background()
 			buildDir := os.TempDir()
 
-			dEnv := getTestEnv(ctx, t)
-			startOfBountyHash, cm, err := attteststate.GenTestCommitGraph(ctx, dEnv.DoltDB, createMeta(t))
+			dEnv := doltutils.GetTestEnv(ctx, t)
+			startOfBountyHash, cm, err := attteststate.GenTestCommitGraph(ctx, dEnv.DoltDB, doltutils.CreateMeta(t))
 			require.NoError(t, err)
 
 			expected := getCellwiseExpected()

@@ -162,8 +162,7 @@ func main() {
 		method = cellwise.NewCWAtt(logger, dEnv.DoltDB, opts.startHash, shardStore, shardParams)
 	case "prolly":
 		shardParams := prolly_cellwise.ProllyAttShardParams{
-			RowsPerShard:       100_000,
-			SubdivideDiffsSize: 1_000_000,
+			RowsPerShard: 100_000,
 		}
 		method = prolly_cellwise.NewMethod(logger, dEnv.DoltDB, opts.startHash, shardStore, shardParams)
 	default:

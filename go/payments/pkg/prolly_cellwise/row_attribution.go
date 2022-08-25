@@ -32,7 +32,8 @@ func prollyRowAttFromValue(d val.TupleDesc, tuple val.Tuple) prollyRowAtt {
 	att := make([]*int16, tuple.Count())
 	for i := 0; i < tuple.Count(); i++ {
 		if v, ok := d.GetInt16(i, tuple); ok {
-			att[i] = &v
+			v2 := v
+			att[i] = &v2
 		}
 	}
 	return att
@@ -42,13 +43,7 @@ func prollyRowAttFromValue(d val.TupleDesc, tuple val.Tuple) prollyRowAtt {
 func (ra prollyRowAtt) updateFromDiff(kd val.TupleDesc, commitIdx int16, difference tree.Diff) error {
 	numPks := kd.Count()
 
-	if difference.Type == tree.RemovedDiff {
-		// Clear all owners
-		for i := range ra {
-			ra[i] = nil
-		}
-		return nil
-	} else if difference.Type == tree.AddedDiff {
+	if difference.Type == tree.AddedDiff {
 		// Set all pks as current owner
 		ci := commitIdx
 		for i := 0; i < numPks; i++ {

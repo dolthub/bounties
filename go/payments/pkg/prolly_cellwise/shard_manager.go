@@ -114,6 +114,7 @@ type prollyShardManager struct {
 	commitCounts  []uint64
 
 	shards []AttributionShard
+	seen   int
 }
 
 // NewProllyShardManager takes an input shard, a ShardStore, some ShardParams and some other metadata and returns a prollyShardManager
@@ -232,14 +233,16 @@ func (sm *prollyShardManager) closeCurrentShard(ctx context.Context, end val.Tup
 		start := time.Now()
 		sm.logger.Info("closing and persisting shard")
 		defer func() {
-			sm.logger.Info("closed shard", zap.Duration("took", time.Since(start)))
-		}()
+			var startK, endK string
+			if len(sm.startKey) > 0 {
+				startK = sm.kb.Desc.Format(sm.startKey)
+			}
+			if len(end) > 0 {
+				endK = sm.kb.Desc.Format(end)
+			}
 
-		m, err := sm.mut.Map(ctx)
-		if err != nil {
-			return err
-		}
-		v := shim.ValueFromMap(m)
+			sm.logger.Info("closed shard", zap.String("start", startK), zap.String("end", endK), zap.Duration("took", time.Since(start)))
+		}()
 
 		// if this is the first output shard, maintain the starting key from the input shard.
 		startKey := sm.startKey
@@ -258,9 +261,21 @@ func (sm *prollyShardManager) closeCurrentShard(ctx context.Context, end val.Tup
 			CommitCounts:   sm.commitCounts,
 		}
 
+		m, err := sm.mut.Map(ctx)
+		if err != nil {
+			return err
+		}
+		v := shim.ValueFromMap(m)
+
+		vrw := types.NewValueStore(sm.currStore)
+		nootNodeRef, err := vrw.WriteValue(ctx, v)
+		if err != nil {
+			return nil
+		}
+
 		// persist to shard store
 		path := sm.shardStore.Join(sm.shardBasePath, shard.Key(sm.nbf))
-		err = sm.shardStore.WriteShard(ctx, path, sm.currStore, v)
+		err = sm.shardStore.WriteShard(ctx, path, sm.currStore, nootNodeRef)
 		if err != nil {
 			return err
 		}

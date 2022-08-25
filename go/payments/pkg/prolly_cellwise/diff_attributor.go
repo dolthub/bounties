@@ -166,6 +166,10 @@ func (dA *diffAttributor) attributeDiffs(ctx context.Context, diffIter doltutils
 func (dA *diffAttributor) createAttrib(ctx context.Context, diff tree.Diff) error {
 	dA.incAndLog(&dA.newData)
 
+	if diff.Type == tree.RemovedDiff {
+		return nil
+	}
+
 	ra := make(prollyRowAtt, dA.attVd.Count())
 	err := ra.updateFromDiff(dA.kd, dA.commitIdx, diff)
 	if err != nil {
@@ -177,11 +181,25 @@ func (dA *diffAttributor) createAttrib(ctx context.Context, diff tree.Diff) erro
 func (dA *diffAttributor) copyAttrib(ctx context.Context, attKey, attVal val.Tuple) error {
 	dA.incAndLog(&dA.unchangedData)
 
-	return dA.shardMgr.addRowAtt(ctx, attKey, nil, attVal)
+	ra := make(prollyRowAtt, dA.attVd.Count())
+	for i := 0; i < dA.attVd.Count(); i++ {
+		v, ok := dA.attVd.GetInt16(i, attVal)
+		if ok {
+			ra[i] = &v
+		}
+	}
+
+	return dA.shardMgr.addRowAtt(ctx, attKey, ra, attVal)
 }
 
 func (dA *diffAttributor) updateAttrib(ctx context.Context, diff tree.Diff, attVal val.Tuple) error {
 	dA.incAndLog(&dA.modifiedData)
+
+	if diff.Type == tree.RemovedDiff {
+		// Don't send an attribution to the output shard if a row was deleted
+		return nil
+	}
+
 	ra := prollyRowAttFromValue(dA.attVd, attVal)
 
 	err := ra.updateFromDiff(dA.kd, dA.commitIdx, diff)

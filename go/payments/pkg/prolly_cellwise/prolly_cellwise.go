@@ -31,7 +31,8 @@ type ProllyAttShardParams struct {
 	RowsPerShard int
 	// MinShardSize uint64 need to implement
 
-	SubdivideDiffsSize int64
+	// TODO (dhruv): maybe implement diff subdivisions
+	// SubdivideDiffsSize int64
 }
 
 // Method implements att.AttributionMethod
@@ -294,20 +295,6 @@ func canDiffSchemas(format *types.NomsBinFormat, toSch, fromSch schema.Schema) e
 	return nil
 }
 
-func getRowsAsDiffer(ctx context.Context, tbl *doltdb.Table, diffType tree.DiffType, rng *prolly.Range) (doltutils.ProllyDiffIter, error) {
-	idx, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-	m := durable.ProllyMapFromIndex(idx)
-
-	if rng != nil {
-		return doltutils.NewRowAsDiffIterRange(ctx, m, *rng, diffType)
-	}
-
-	return doltutils.NewRowAsDiffIter(ctx, m, diffType)
-}
-
 // getProllyRange returns a prolly.Range based on the |shard|. If
 // |StartInclusive| and |EndInclusive| is nil then a nil range is returned.
 func getProllyRange(shard AttributionShard, kd val.TupleDesc) (*prolly.Range, error) {
@@ -325,7 +312,7 @@ func getProllyRange(shard AttributionShard, kd val.TupleDesc) (*prolly.Range, er
 		return &rng, nil
 	}
 
-	rng := prolly.OpenStartRange(shard.StartInclusive, shard.EndExclusive, kd)
+	rng := prolly.OpenStopRange(shard.StartInclusive, shard.EndExclusive, kd)
 	return &rng, nil
 }
 
@@ -470,8 +457,18 @@ func (m Method) readShardFile(ctx context.Context, shard AttributionShard, tblSc
 		return prolly.Map{}, err
 	}
 
+	rootNodeRef, ok := memShard.Value.(types.Ref)
+	if !ok {
+		return prolly.Map{}, fmt.Errorf("expected shard value to be a ref")
+	}
+
+	rootNodeVal, err := memShard.Vrw.ReadValue(ctx, rootNodeRef.TargetHash())
+	if err != nil {
+		return prolly.Map{}, err
+	}
+
 	kd, vd := getAttribDescriptorsFromTblSchema(tblSch)
-	rootNode, err := shim.NodeFromValue(memShard.Value)
+	rootNode, err := shim.NodeFromValue(rootNodeVal)
 	if err != nil {
 		return prolly.Map{}, err
 	}
