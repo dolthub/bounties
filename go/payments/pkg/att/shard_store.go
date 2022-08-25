@@ -70,14 +70,14 @@ func (f *FilesysShardStore) WriteShard(ctx context.Context, key string, store *v
 func (f *FilesysShardStore) ReadShard(ctx context.Context, key string) (types.Value, error) {
 	absPath := filepath.Join(f.rootDir, key)
 
-	vals, err := valuefile.ReadValueFile(ctx, absPath)
+	vf, err := valuefile.ReadValueFile(ctx, absPath)
 	if os.IsNotExist(err) {
 		return nil, ErrSummaryDoesntExist
 	} else if err != nil {
 		return nil, err
 	}
 
-	return vals[0], nil
+	return vf.Values[0], nil
 }
 
 // Join joins key elements into a single key with delimiters that are appropriate for the backing storage.  In this case

@@ -19,10 +19,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"go.uber.org/zap"
 	"io"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/dolthub/bounties/go/payments/pkg/att"
 	"github.com/dolthub/bounties/go/payments/pkg/doltutils/differs"
@@ -103,15 +104,15 @@ func (cwa CWAttribution) SerializeResults(ctx context.Context, results att.Shard
 // DeserializeResults takes a []byte and deserializes it ta a ShardResult
 func (cwa CWAttribution) DeserializeResults(ctx context.Context, data []byte) (att.ShardResult, error) {
 	buf := bytes.NewBuffer(data)
-	vals, err := valuefile.ReadFromReader(ctx, buf)
+	vf, err := valuefile.ReadFromReader(ctx, buf)
 	if err != nil {
 		return AttributionShard{}, err
-	} else if len(vals) != 1 {
+	} else if len(vf.Values) != 1 {
 		return AttributionShard{}, errors.New("corrupt shard info")
 	}
 
 	var results []AttributionShard
-	err = marshal.Unmarshal(ctx, cwa.ddb.Format(), vals[0], &results)
+	err = marshal.Unmarshal(ctx, cwa.ddb.Format(), vf.Values[0], &results)
 	if err != nil {
 		return nil, err
 	}
