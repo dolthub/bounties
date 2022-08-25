@@ -33,7 +33,6 @@ import (
 
 const (
 	TestTableName = "test"
-	NumCommits    = 5
 )
 
 type tableState struct {
@@ -474,7 +473,15 @@ func createCommit(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValu
 	return root, cm, nil
 }
 
-func GenTestCommitGraph(ctx context.Context, ddb *doltdb.DoltDB, meta [NumCommits]*datas.CommitMeta) (hash.Hash, *doltdb.Commit, error) {
+func GetNumCommits() int {
+	if types.IsFormat_DOLT(types.Format_Default) {
+		return 4
+	} else {
+		return 5
+	}
+}
+
+func GenTestCommitGraph(ctx context.Context, ddb *doltdb.DoltDB, meta []*datas.CommitMeta) (hash.Hash, *doltdb.Commit, error) {
 	var states []tableState
 	var err error
 	if types.IsFormat_DOLT(ddb.Format()) {

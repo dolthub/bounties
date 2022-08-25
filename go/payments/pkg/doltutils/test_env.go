@@ -41,9 +41,9 @@ func GetTestEnv(ctx context.Context, t *testing.T) *env.DoltEnv {
 	return dEnv
 }
 
-func CreateMeta(t *testing.T) [attteststate.NumCommits]*datas.CommitMeta {
-	var meta [attteststate.NumCommits]*datas.CommitMeta
-	for i := 0; i < attteststate.NumCommits; i++ {
+func CreateMeta(t *testing.T) []*datas.CommitMeta {
+	meta := make([]*datas.CommitMeta, attteststate.GetNumCommits())
+	for i := 0; i < len(meta); i++ {
 		var err error
 		meta[i], err = datas.NewCommitMeta(testUsername, testEmail, fmt.Sprintf("Commit %d", i))
 		require.NoError(t, err)
