@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
@@ -71,6 +72,10 @@ func assertOnExpectedAttribution(t *testing.T, expected []uint64, summary Cellwi
 }
 
 func TestAttribution(t *testing.T) {
+	if types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip()
+	}
+
 	tests := []struct {
 		name        string
 		shardParams CWAttShardParams
