@@ -200,11 +200,7 @@ func (m Method) shardsHaveDiffs(ctx context.Context, shards []AttributionShard, 
 				return nil, err
 			}
 
-			if err == io.EOF {
-				hasDiffs[i] = false
-			} else {
-				hasDiffs[i] = true
-			}
+			hasDiffs[i] = err != io.EOF
 		}
 	}
 
@@ -339,6 +335,8 @@ func (m Method) ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *d
 		defer func() {
 			m.logger.Info("Processing Shard End", zap.String("shard_key", shardKey), zap.String("shard_info", string(infoJson)), zap.Duration("took", time.Since(start)))
 		}()
+	} else {
+		m.logger.Error("failed to marshall shard info", zap.Error(err))
 	}
 
 	commitHash, err := cm.HashOf()

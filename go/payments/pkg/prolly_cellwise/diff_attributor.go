@@ -151,7 +151,6 @@ func (dA *diffAttributor) attributeDiffs(ctx context.Context, diffIter doltutils
 	}
 
 	for len(diff.Key) != 0 {
-		dA.incAndLog(&dA.newData)
 		err = dA.createAttrib(ctx, diff)
 		if err != nil {
 			return err
@@ -163,7 +162,6 @@ func (dA *diffAttributor) attributeDiffs(ctx context.Context, diffIter doltutils
 	}
 
 	for len(attKey) != 0 {
-		dA.incAndLog(&dA.unchangedData)
 		err = dA.copyAttrib(ctx, attKey, attVal)
 		if err != nil {
 			return err
