@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/dolthub/bounties/go/payments/pkg/prolly_cellwise"
 	"github.com/pkg/profile"
 	"go.uber.org/zap"
 
@@ -71,7 +72,7 @@ func errExit(message string) {
 func main() {
 	ctx := context.Background()
 
-	methodStr := flag.String("method", "", "The method used to calculate payments.  Supported options: 'cellwise'.")
+	methodStr := flag.String("method", "", "The method used to calculate payments.  Supported options: 'cellwise', 'prolly'.")
 	repoDir := flag.String("repo-dir", "./", "Directory of the repository.")
 	startHash := flag.String("start", "", "Commit hash representing the start of a bounty before any contributions are made.")
 	endHash := flag.String("end", "", "Last commit hash included in the payment calculation.")
@@ -141,6 +142,16 @@ func main() {
 		errExit(fmt.Sprintf("Failed to load dolt repo state: %v", dEnv.RSLoadErr))
 	}
 
+	shardStore, err := att.NewFilesysShardStore(filepath.Join(opts.buildDir, opts.startHash.String()))
+	if err != nil {
+		errExit(fmt.Sprintf("Failed to create local shardstore using the directory '%s': %v", opts.buildDir, err))
+	}
+
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		errExit(fmt.Sprintf("Failed to create logger: %s", err.Error()))
+	}
+
 	var method att.AttributionMethod
 	switch *methodStr {
 	case "cellwise":
@@ -148,18 +159,12 @@ func main() {
 			RowsPerShard:       100_000,
 			SubdivideDiffsSize: 1_000_000,
 		}
-
-		shardStore, err := att.NewFilesysShardStore(filepath.Join(opts.buildDir, opts.startHash.String()))
-		if err != nil {
-			errExit(fmt.Sprintf("Failed to create local shardstore using the directory '%s': %v", opts.buildDir, err))
-		}
-
-		logger, err := zap.NewDevelopment()
-		if err != nil {
-			errExit(fmt.Sprintf("Failed to create logger: %s", err.Error()))
-		}
-
 		method = cellwise.NewCWAtt(logger, dEnv.DoltDB, opts.startHash, shardStore, shardParams)
+	case "prolly":
+		shardParams := prolly_cellwise.ProllyAttShardParams{
+			RowsPerShard: 100_000,
+		}
+		method = prolly_cellwise.NewMethod(logger, dEnv.DoltDB, opts.startHash, shardStore, shardParams)
 	default:
 		errExit(fmt.Sprintf("Unknown --method '%s'", *methodStr))
 	}
@@ -203,7 +208,7 @@ func calcAttribution(ctx context.Context, method att.AttributionMethod, ddb *dol
 		summary = method.EmptySummary(ctx)
 	}
 
-	fmt.Println("Processing", len(mergeCommits), "merge commits.")
+	fmt.Println("Processing", len(mergeCommits)-prevCommitIdx-1, "merge commits.")
 	for commitIdx := prevCommitIdx + 1; commitIdx < len(mergeCommits); commitIdx++ {
 		start := time.Now()
 
@@ -248,10 +253,13 @@ func calcAttribution(ctx context.Context, method att.AttributionMethod, ddb *dol
 			return err
 		}
 
-		printSummaryInfo(ctx, summary, mergeCommits[:commitIdx+1], time.Since(start))
+		printSummaryInfo(ctx, summary, mergeCommits[:commitIdx+1])
+		fmt.Printf("Processed commit %s (%d/%d) in %s\n", commitHash.String(), commitIdx+1, len(mergeCommits), time.Since(start))
 
 		prevCommit = commit
 	}
+
+	fmt.Println("Done!")
 
 	return nil
 }
@@ -277,7 +285,7 @@ func readLatestSummary(ctx context.Context, method att.AttributionMethod, mergeC
 	return -1, nil, nil
 }
 
-func printSummaryInfo(ctx context.Context, summary att.Summary, commits []*doltdb.Commit, elapsed time.Duration) {
+func printSummaryInfo(ctx context.Context, summary att.Summary, commits []*doltdb.Commit) {
 	commitToCount, err := summary.CommitToCount(ctx)
 	if err != nil {
 		panic(err)
@@ -297,8 +305,6 @@ func printSummaryInfo(ctx context.Context, summary att.Summary, commits []*doltd
 
 		fmt.Printf("%02d. %s: %d\n", i, h.String(), count)
 	}
-
-	fmt.Printf("Built it %d ms\n", elapsed.Milliseconds())
 }
 
 func validateDirectory(dir string) (string, error) {

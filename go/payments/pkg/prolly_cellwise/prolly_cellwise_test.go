@@ -1,18 +1,4 @@
-// Copyright 2020 Dolthub, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-package cellwise
+package prolly_cellwise
 
 import (
 	"context"
@@ -20,89 +6,79 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dolthub/dolt/go/store/types"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
-
 	"github.com/dolthub/bounties/go/payments/pkg/att"
 	"github.com/dolthub/bounties/go/payments/pkg/attteststate"
 	"github.com/dolthub/bounties/go/payments/pkg/doltutils"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 func getCellwiseExpected() [][]uint64 {
 	var expected [][]uint64
 
 	// Expected Scoreboard:
-	// Commit 1: 2*1000 new = 2000
+	// Commit A: 2*1000 new = 2000
 	expected = append(expected, []uint64{2000})
 
 	// Expected Scoreboard:
-	// Commit 1: 2000 - (2*100 deleted + 1*100 col1 changes) = 1700
-	// Commit 2: 3*100 new + (2 * 100 changed) = 500
+	// Commit A: 2000 - (2*100 deleted + 1*100 col1 changes) = 1700
+	// Commit B: 3*100 new + (2 * 100 changed) = 500
 	expected = append(expected, []uint64{1700, 500})
 
 	// Expected Scoreboard:
-	// Commit 1: 1700 - (1*100 deleted + 1*50 col1 changes) = 1550
-	// Commit 2: 500 - (2*100 deleted + 2*50 col1/col2 changes) = 200
-	// Commit 3: 4*100 new + (3 * 100 changed) = 700
+	// Commit A: 1700 - (1*100 deleted + 1*50 col1 changes) = 1550
+	// Commit B: 500 - (2*100 deleted + 2*50 col1/col2 changes) = 200
+	// Commit C: 4*100 new + (3 * 100 changed) = 700
 	expected = append(expected, []uint64{1550, 200, 700})
 
 	// Expected Scoreboard:
-	// Commit 1: 1550 + 2*100 re-added = 1750
-	// Commit 2: 200 + 1*100 re-added = 300
-	// Commit 3: 700 - 200 col3 cells removed from schema = 500
-	// Commit 4: 100 rows with col4 = 100
-	expected = append(expected, []uint64{1750, 300, 500, 100})
-
-	// Expected Scoreboard:
-	// Commit 1: 1750 - 1*100 col1 changed = 1650
-	// Commit 2: 300 + 1*100 col1 reverted to "b" = 400
-	// Commit 3: 500
-	// Commit 4: 100
-	// Commit 5: 0
-	expected = append(expected, []uint64{1650, 400, 500, 100, 0})
+	// Commit A: 1550
+	// Commit B: 200
+	// Commit C: 700 - (3*50 col1/col2/col3 changes = 550
+	// Commit D: 3*50 col1/col2/col3 changes in 1000-1050 + 1*50 col3 changes in 1050-1100 = 400
+	expected = append(expected, []uint64{1550, 200, 550, 200})
 
 	return expected
 }
 
-func assertOnExpectedAttribution(t *testing.T, expected []uint64, summary CellwiseAttSummary) {
+func assertOnExpectedAttribution(t *testing.T, expected []uint64, summary ProllyAttSummary) {
 	require.Equal(t, expected, summary.CommitCounts)
 }
 
-func TestAttribution(t *testing.T) {
-	if types.IsFormat_DOLT(types.Format_Default) {
+func TestProllyAttribution(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip()
 	}
 
 	tests := []struct {
 		name        string
-		shardParams CWAttShardParams
+		shardParams ProllyAttShardParams
 	}{
 		{
 			"Million rows per shard",
-			CWAttShardParams{
+			ProllyAttShardParams{
 				RowsPerShard: 1_000_000,
 			},
 		},
 		{
 			"100 rows per shard",
-			CWAttShardParams{
+			ProllyAttShardParams{
+				RowsPerShard: 100,
+			},
+		},
+		{
+			"100 rows per shard",
+			ProllyAttShardParams{
 				RowsPerShard: 100,
 			},
 		},
 		{
 			"31 rows per shard",
-			CWAttShardParams{
+			ProllyAttShardParams{
 				RowsPerShard: 31,
-			},
-		},
-		{
-			"31 rows per shard, min shard size 11",
-			CWAttShardParams{
-				RowsPerShard:       31,
-				SubdivideDiffsSize: 64,
 			},
 		},
 	}
@@ -124,22 +100,24 @@ func TestAttribution(t *testing.T) {
 			require.NoError(t, err)
 			logger, err := zap.NewDevelopment()
 			require.NoError(t, err)
-			cwAtt := NewCWAtt(logger, dEnv.DoltDB, startOfBountyHash, shardStore, test.shardParams)
+			method := NewMethod(logger, dEnv.DoltDB, startOfBountyHash, shardStore, test.shardParams)
 			require.Equal(t, len(expected), len(commits))
 
-			var summary att.Summary = emptySummary(startOfBountyHash)
+			kd := attteststate.AttSch.GetKeyDescriptor()
+
+			var prevSummary att.Summary = emptySummary(startOfBountyHash)
 			var prevCommit *doltdb.Commit
 			for i := 0; i < len(expected); i++ {
 				commit := commits[i]
 				require.NoError(t, err)
 
-				shards, err := cwAtt.CollectShards(ctx, commit, prevCommit, summary)
+				shards, err := method.CollectShards(ctx, commit, prevCommit, prevSummary)
 				require.NoError(t, err)
 
 				for j := range shards {
-					serialized, err := cwAtt.SerializeShardInfo(ctx, shards[j])
+					serialized, err := method.SerializeShardInfo(ctx, shards[j])
 					require.NoError(t, err)
-					deserialized, err := cwAtt.DeserializeShardInfo(ctx, serialized)
+					deserialized, err := method.DeserializeShardInfo(ctx, serialized)
 					require.NoError(t, err)
 
 					unchanged, unchangedOK := shards[j].(UnchangedShard)
@@ -153,18 +131,46 @@ func TestAttribution(t *testing.T) {
 					}
 				}
 
+				strer := func(k val.Tuple) string {
+					if len(k) == 0 {
+						return "none"
+					}
+
+					return kd.Format(k)
+				}
+
 				var results []att.ShardResult
 				for _, shard := range shards {
-					result, err := cwAtt.ProcessShard(ctx, int16(i), commit, prevCommit, shard)
+
+					rShard, ok := shard.(AttributionShard)
+					if ok {
+						t.Logf("Processing shard")
+						t.Log("Start Inclusive:", strer(rShard.StartInclusive))
+						t.Log("End Exclusive:", strer(rShard.EndExclusive))
+					}
+
+					result, err := method.ProcessShard(ctx, int16(i), commit, prevCommit, shard)
 					require.NoError(t, err)
+
+					subshards := result.([]AttributionShard)
+
+					if len(subshards) > 1 {
+						t.Logf("Subdivided shard into %d shards", len(subshards))
+						for i, subShard := range result.([]AttributionShard) {
+
+							t.Logf("=== Sub shard %d ===", i+1)
+							t.Log("Start Inclusive:", strer(subShard.StartInclusive))
+							t.Log("End Exclusive:", strer(subShard.EndExclusive))
+						}
+					}
 
 					results = append(results, result)
 				}
 
 				for j := range results {
-					serialized, err := cwAtt.SerializeResults(ctx, results[j])
+					serialized, err := method.SerializeResults(ctx, results[j])
 					require.NoError(t, err)
-					deserialized, err := cwAtt.DeserializeResults(ctx, serialized)
+					deserialized, err := method.DeserializeResults(ctx, serialized)
 					require.NoError(t, err)
 
 					resShards := results[j].([]AttributionShard)
@@ -177,15 +183,15 @@ func TestAttribution(t *testing.T) {
 				commitHash, err := commit.HashOf()
 				require.NoError(t, err)
 
-				summary, err = cwAtt.ProcessResults(ctx, commitHash, summary, results)
+				newSummary, err := method.ProcessResults(ctx, commitHash, prevSummary, results)
 				require.NoError(t, err)
 
 				expectedAtt := expected[i]
-				assertOnExpectedAttribution(t, expectedAtt, summary.(CellwiseAttSummary))
+				assertOnExpectedAttribution(t, expectedAtt, newSummary.(ProllyAttSummary))
 
-				summaryKey, err := cwAtt.WriteSummary(ctx, summary)
+				summaryKey, err := method.WriteSummary(ctx, newSummary)
 				require.NoError(t, err)
-				summary, err = cwAtt.ReadSummary(ctx, summaryKey)
+				prevSummary, err = method.ReadSummary(ctx, summaryKey)
 				require.NoError(t, err)
 
 				prevCommit = commit

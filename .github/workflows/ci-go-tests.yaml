@@ -6,8 +6,11 @@ on:
       - 'go/**'
 jobs:
   test_unix:
-    name: Go tests
+    name: Go tests ${{ matrix.dolt_fmt }}
     runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        dolt_fmt: ["", "__DOLT__"]
     steps:
       - name: Set up Go 1.x
         uses: actions/setup-go@v2
@@ -18,3 +21,5 @@ jobs:
       - name: Test All
         working-directory: ./go
         run: go test ./...
+        env:
+          DOLT_DEFAULT_BIN_FORMAT: ${{ matrix.dolt_fmt }}

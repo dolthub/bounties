@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/valuefile"
 )
@@ -28,9 +29,16 @@ type ShardStore interface {
 	// WriteShard presists shard data stored in noms.valuefile format
 	WriteShard(ctx context.Context, key string, store *valuefile.FileValueStore, shardVal types.Value) error
 	// ReadShard reads shard data
-	ReadShard(ctx context.Context, key string) (types.Value, error)
+	ReadShard(ctx context.Context, key string) (*MemShard, error)
 	// Join joins key elements into a single key with delimiters that are appropriate for the backing storage
 	Join(keyElements ...string) string
+}
+
+// MemShard is the in memory representation of a shard and its |Value|.
+type MemShard struct {
+	Value types.Value
+	Vrw   types.ValueReadWriter
+	Ns    tree.NodeStore
 }
 
 // ensure *FilesysShardStoree implements ShardStore
@@ -67,7 +75,7 @@ func (f *FilesysShardStore) WriteShard(ctx context.Context, key string, store *v
 }
 
 // ReadShard reads shard data
-func (f *FilesysShardStore) ReadShard(ctx context.Context, key string) (types.Value, error) {
+func (f *FilesysShardStore) ReadShard(ctx context.Context, key string) (*MemShard, error) {
 	absPath := filepath.Join(f.rootDir, key)
 
 	vf, err := valuefile.ReadValueFile(ctx, absPath)
@@ -77,7 +85,11 @@ func (f *FilesysShardStore) ReadShard(ctx context.Context, key string) (types.Va
 		return nil, err
 	}
 
-	return vf.Values[0], nil
+	return &MemShard{
+		Value: vf.Values[0],
+		Vrw:   vf.Vrw,
+		Ns:    vf.Ns,
+	}, nil
 }
 
 // Join joins key elements into a single key with delimiters that are appropriate for the backing storage.  In this case

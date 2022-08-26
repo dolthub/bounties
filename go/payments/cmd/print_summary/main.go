@@ -20,7 +20,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/dolthub/bounties/go/payments/pkg/att"
 	"github.com/dolthub/bounties/go/payments/pkg/cellwise"
+	"github.com/dolthub/bounties/go/payments/pkg/prolly_cellwise"
 	"github.com/dolthub/dolt/go/store/marshal"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/valuefile"
@@ -34,7 +36,7 @@ func errExit(message string) {
 func main() {
 	ctx := context.Background()
 
-	methodStr := flag.String("method", "", "The method used to calculate payments.  Supported options: 'cellwise'.")
+	methodStr := flag.String("method", "", "The method used to calculate payments.  Supported options: 'cellwise', 'prolly'.")
 	summaryFile := flag.String("summary-file", "", "summary file to print")
 	flag.Parse()
 
@@ -59,25 +61,35 @@ func main() {
 			errExit(fmt.Sprintf("Failed to unmarshall '%s': %v\n", *summaryFile, err))
 		}
 
-		commitToCount, err := summary.CommitToCount(ctx)
+		printSummary(ctx, summary)
+	case "prolly":
+		vf, err := valuefile.ReadValueFile(ctx, *summaryFile)
+		if os.IsNotExist(err) {
+			errExit(fmt.Sprintf("'%s' does not exist\n", *summaryFile))
+		} else if err != nil {
+			errExit(fmt.Sprintf("Failed to read '%s': %v\n", *summaryFile, err))
+		}
+
+		var summary prolly_cellwise.ProllyAttSummary
+		err = marshal.Unmarshal(ctx, types.Format_Default, vf.Values[0], &summary)
 		if err != nil {
-			panic(err)
+			errExit(fmt.Sprintf("Failed to unmarshall '%s': %v\n", *summaryFile, err))
 		}
 
-		fmt.Println("Commit Counts:")
-		for i, h := range summary.CommitHashes {
-			count, ok := commitToCount[h]
+		printSummary(ctx, summary)
+	default:
+		errExit(fmt.Sprintf("unknown method: %s", *methodStr))
+	}
+}
 
-			if !ok {
-				panic("failed to find count for " + h.String())
-			}
+func printSummary(ctx context.Context, summary att.Summary) {
+	commitToCount, err := summary.CommitToCount(ctx)
+	if err != nil {
+		panic(err)
+	}
 
-			fmt.Printf("\t%02d. %s: %d\n", i, h.String(), count)
-		}
-
-		fmt.Println("\nShard Counts:")
-		for table, shards := range summary.TableShards {
-			fmt.Printf("\t%s: %d\n", table, len(shards))
-		}
+	fmt.Println("Commit Counts:")
+	for h, c := range commitToCount {
+		fmt.Printf("%s: %d\n", h.String(), c)
 	}
 }
