@@ -158,6 +158,7 @@ func (m Method) collectShards(ctx context.Context, summary ProllyAttSummary, roo
 
 func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, table string, root *doltdb.RootValue, prevRoot *doltdb.RootValue) ([]att.ShardInfo, error) {
 	if m.shardParams.SubdivideDiffsSize <= 0 {
+		m.logger.Info("not going to subdivide shard. Subdivide diffs size < 0")
 		return []att.ShardInfo{shard}, nil
 	}
 
@@ -189,6 +190,7 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 	}
 
 	if delta <= m.shardParams.SubdivideDiffsSize {
+		m.logger.Info("not going to subdivide shard. delta too small", zap.Uint64("delta", delta))
 		return []att.ShardInfo{shard}, nil
 	}
 
