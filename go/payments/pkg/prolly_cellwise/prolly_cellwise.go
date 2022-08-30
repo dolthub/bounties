@@ -45,8 +45,7 @@ type ProllyAttShardParams struct {
 	RowsPerShard int
 	// MinShardSize uint64 need to implement
 
-	// TODO (dhruv): maybe implement diff subdivisions
-	// SubdivideDiffsSize int64
+	SubdivideDiffsSize uint64
 }
 
 // Method implements att.AttributionMethod
@@ -142,8 +141,12 @@ func (m Method) collectShards(ctx context.Context, summary ProllyAttSummary, roo
 
 		for i := range shards {
 			if hasDiffs[i] {
-				// TODO (dhruv) subdivide shards?
-				allShards = append(allShards, shards[i])
+				subDivided, err := m.subdivideShard(ctx, shards[i], table, root, prevRoot)
+				if err != nil {
+					return nil, err
+				}
+
+				allShards = append(allShards, subDivided...)
 			} else {
 				allShards = append(allShards, UnchangedShard{shards[i]})
 			}
@@ -151,6 +154,142 @@ func (m Method) collectShards(ctx context.Context, summary ProllyAttSummary, roo
 	}
 
 	return allShards, nil
+}
+
+func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, table string, root *doltdb.RootValue, prevRoot *doltdb.RootValue) ([]att.ShardInfo, error) {
+	if m.shardParams.SubdivideDiffsSize <= 0 {
+		return []att.ShardInfo{shard}, nil
+	}
+
+	rowData, err := getRowData(ctx, table, root)
+	if err != nil {
+		return nil, err
+	}
+
+	prevRowData, err := getRowData(ctx, table, prevRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	size, err := getRangeSize(ctx, rowData, shard)
+	if err != nil {
+		return nil, err
+	}
+
+	prevSize, err := getRangeSize(ctx, prevRowData, shard)
+	if err != nil {
+		return nil, err
+	}
+
+	var delta uint64
+	if size > prevSize {
+		delta = size - prevSize
+	} else {
+		delta = prevSize - size
+	}
+
+	if delta <= m.shardParams.SubdivideDiffsSize {
+		return []att.ShardInfo{shard}, nil
+	}
+
+	var subDivisions []att.ShardInfo
+	subDivideRows := rowData
+
+	if prevSize > size {
+		subDivideRows = prevRowData
+	}
+
+	numSubs := (delta / m.shardParams.SubdivideDiffsSize) + 1
+	subDivisionStep := delta / numSubs
+
+	var startIdx uint64
+	if len(shard.StartInclusive) > 0 {
+		startIdx, err = subDivideRows.GetOrdinal(ctx, shard.StartInclusive)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	start := shard.StartInclusive
+	var subdivisionKeys []string
+	for i := uint64(0); i < numSubs-1; i++ {
+
+		itr, err := subDivideRows.IterOrdinalRange(ctx, startIdx+subDivisionStep, startIdx+subDivisionStep+1)
+		if err != nil {
+			return nil, err
+		}
+		k, _, err := itr.Next(ctx)
+		if err != nil {
+			if err == io.EOF {
+				err = fmt.Errorf("expected to find key at ordinal range [%d, %d)", startIdx+subDivisionStep, startIdx+subDivisionStep+1)
+			}
+			return nil, err
+		}
+
+		newSub := AttributionShard{
+			Table:          shard.Table,
+			Path:           shard.Path,
+			StartInclusive: start,
+			EndExclusive:   k,
+		}
+		subDivisions = append(subDivisions, newSub)
+		subdivisionKeys = append(subdivisionKeys, newSub.Key(m.ddb.Format()))
+
+		start = k
+		startIdx += subDivisionStep
+	}
+
+	lastSub := AttributionShard{
+		Table:          shard.Table,
+		Path:           shard.Path,
+		StartInclusive: start,
+		EndExclusive:   shard.EndExclusive,
+	}
+	subDivisions = append(subDivisions, lastSub)
+	subdivisionKeys = append(subdivisionKeys, lastSub.Key(m.ddb.Format()))
+
+	m.logger.Info("Subdividing Shard", zap.String("shard_key", shard.Key(m.ddb.Format())), zap.Uint64("num_subdivisions", numSubs), zap.Uint64("rowdata_range_size_delta", delta), zap.Strings("subdivisions", subdivisionKeys))
+	return subDivisions, nil
+
+}
+
+func getRangeSize(ctx context.Context, m prolly.Map, shard AttributionShard) (uint64, error) {
+	kd, _ := m.Descriptors()
+	rng, err := getProllyRange(shard, kd)
+	if err != nil {
+		return 0, err
+	}
+
+	var size uint64
+	if rng != nil {
+		size, err = m.GetRangeCardinality(ctx, *rng)
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		n, err := m.Count()
+		if err != nil {
+			return 0, err
+		}
+		size = uint64(n)
+	}
+
+	return size, nil
+}
+
+func getRowData(ctx context.Context, table string, root *doltdb.RootValue) (prolly.Map, error) {
+	tbl, _, ok, err := root.GetTableInsensitive(ctx, table)
+	if err != nil {
+		return prolly.Map{}, err
+	}
+	if !ok {
+		return prolly.Map{}, fmt.Errorf("could not find table %s in root", table)
+	}
+	idx, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return prolly.Map{}, err
+	}
+	return durable.ProllyMapFromIndex(idx), nil
 }
 
 // looks at whether the table has changed.  If it has changed, it then looks to see if their are diffs that touch the
