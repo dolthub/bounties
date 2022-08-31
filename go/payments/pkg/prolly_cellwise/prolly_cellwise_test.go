@@ -70,17 +70,15 @@ func TestProllyAttribution(t *testing.T) {
 			},
 		},
 		{
-			"31 rows per shard, subdivide diff size 64",
+			"31 rows per shard",
 			ProllyAttShardParams{
-				RowsPerShard:       31,
-				SubdivideDiffsSize: 64,
+				RowsPerShard: 31,
 			},
 		},
 		{
-			"101 rows per shard, subdivide diff size 64",
+			"101 rows per shard",
 			ProllyAttShardParams{
-				RowsPerShard:       101,
-				SubdivideDiffsSize: 64,
+				RowsPerShard: 101,
 			},
 		},
 	}

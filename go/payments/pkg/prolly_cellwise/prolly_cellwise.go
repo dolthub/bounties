@@ -43,9 +43,6 @@ import (
 type ProllyAttShardParams struct {
 	// RowsPerShard define the count at which point a shard is cut and a new one starts
 	RowsPerShard int
-	// MinShardSize uint64 need to implement
-
-	SubdivideDiffsSize uint64
 }
 
 // Method implements att.AttributionMethod
@@ -156,17 +153,7 @@ func (m Method) collectShards(ctx context.Context, summary ProllyAttSummary, roo
 }
 
 func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, table string, root *doltdb.RootValue, prevRoot *doltdb.RootValue) ([]att.ShardInfo, error) {
-	if m.shardParams.SubdivideDiffsSize <= 0 {
-		m.logger.Info("not going to subdivide shard. Subdivide diffs size < 0")
-		return []att.ShardInfo{shard}, nil
-	}
-
 	rowData, err := getRowData(ctx, table, root)
-	if err != nil {
-		return nil, err
-	}
-
-	prevRowData, err := getRowData(ctx, table, prevRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -176,32 +163,34 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 		return nil, err
 	}
 
-	prevSize, err := getRangeSize(ctx, prevRowData, shard)
-	if err != nil {
-		return nil, err
+	var prevSize uint64
+	if prevRoot != nil {
+		prevRowData, err := getRowData(ctx, table, prevRoot)
+		if err != nil {
+			return nil, err
+		}
+
+		prevSize, err = getRangeSize(ctx, prevRowData, shard)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	var delta uint64
-	if size > prevSize {
-		delta = size - prevSize
-	} else {
-		delta = prevSize - size
+	shardCardinality := size
+	if prevSize > size {
+		shardCardinality = prevSize
 	}
 
-	if delta <= m.shardParams.SubdivideDiffsSize {
-		m.logger.Info("not going to subdivide shard. delta too small", zap.Uint64("delta", delta))
+	if shardCardinality < uint64(m.shardParams.RowsPerShard) {
+		m.logger.Info("not going to subdivide shard. Shard cardinality < RowsPerShard.", zap.Uint64("shard_cardinality", shardCardinality))
 		return []att.ShardInfo{shard}, nil
 	}
 
 	var subDivisions []att.ShardInfo
 	subDivideRows := rowData
 
-	if prevSize > size {
-		subDivideRows = prevRowData
-	}
-
-	numSubs := (delta / m.shardParams.SubdivideDiffsSize) + 1
-	subDivisionStep := delta / numSubs
+	numSubs := (shardCardinality / uint64(m.shardParams.RowsPerShard)) + 1
+	subDivisionStep := shardCardinality / numSubs
 
 	var startIdx uint64
 	if len(shard.StartInclusive) > 0 {
@@ -249,7 +238,7 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 	subDivisions = append(subDivisions, lastSub)
 	subdivisionKeys = append(subdivisionKeys, lastSub.Key(m.ddb.Format()))
 
-	m.logger.Info("Subdividing Shard", zap.String("shard_key", shard.Key(m.ddb.Format())), zap.Uint64("num_subdivisions", numSubs), zap.Uint64("rowdata_range_size_delta", delta), zap.Strings("subdivisions", subdivisionKeys))
+	m.logger.Info("Subdividing Shard", zap.String("shard_key", shard.Key(m.ddb.Format())), zap.Uint64("num_subdivisions", numSubs), zap.Uint64("sub_division_size", subDivisionStep), zap.Strings("subdivisions", subdivisionKeys))
 	return subDivisions, nil
 
 }
@@ -311,15 +300,18 @@ func (m Method) shardsHaveDiffs(ctx context.Context, shards []AttributionShard, 
 		}
 	}
 
-	prevTbl, ok, err := prevRoot.GetTable(ctx, table)
-	if err != nil {
-		return nil, err
-	}
-
-	if ok {
-		prevTblHash, err = prevTbl.HashOf()
+	var prevTbl *doltdb.Table
+	if prevRoot != nil {
+		prevTbl, ok, err = prevRoot.GetTable(ctx, table)
 		if err != nil {
 			return nil, err
+		}
+
+		if ok {
+			prevTblHash, err = prevTbl.HashOf()
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
