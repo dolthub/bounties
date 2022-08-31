@@ -28,6 +28,7 @@ type AttributionShard struct {
 	Path string `json:"path"`
 	// CommitCounts is a slice of counts this shard has attributed to commits
 	CommitCounts []uint64 `json:"commit_counts"`
+	ExpectedSize uint64   `json:"expected_size"`
 }
 
 var _ att.ShardInfo = (*AttributionShard)(nil)
@@ -38,7 +39,7 @@ func (as AttributionShard) Key(nbf *types.NomsBinFormat) string {
 }
 
 func (as AttributionShard) DebugFormat(kd val.TupleDesc) string {
-	return fmt.Sprintf("start: %s, end: %s", kd.Format(as.StartInclusive), kd.Format(as.EndExclusive))
+	return fmt.Sprintf("expected size: %d, start: %s, end: %s", as.ExpectedSize, kd.Format(as.StartInclusive), kd.Format(as.EndExclusive))
 }
 
 func (as AttributionShard) Equals(other interface{}) bool {

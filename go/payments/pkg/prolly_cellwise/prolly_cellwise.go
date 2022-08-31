@@ -225,6 +225,7 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 			Path:           shard.Path,
 			StartInclusive: start,
 			EndExclusive:   k,
+			ExpectedSize:   subDivisionStep,
 		}
 		subDivisions = append(subDivisions, newSub)
 		subdivisionKeys = append(subdivisionKeys, newSub.Key(m.ddb.Format()))
