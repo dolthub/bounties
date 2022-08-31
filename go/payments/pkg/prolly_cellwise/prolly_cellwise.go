@@ -181,6 +181,8 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 		shardCardinality = prevSize
 	}
 
+	m.logger.Info(fmt.Sprintf("DHRUV: shard cardinality %d", shardCardinality))
+
 	if shardCardinality < uint64(m.shardParams.RowsPerShard) {
 		m.logger.Info("not going to subdivide shard. Shard cardinality < RowsPerShard.", zap.Uint64("shard_cardinality", shardCardinality))
 		return []att.ShardInfo{shard}, nil
@@ -191,6 +193,8 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 
 	numSubs := (shardCardinality / uint64(m.shardParams.RowsPerShard)) + 1
 	subDivisionStep := shardCardinality / numSubs
+
+	m.logger.Info(fmt.Sprintf("DHRUV: dividing into steps of size %d", subDivisionStep))
 
 	var startIdx uint64
 	if len(shard.StartInclusive) > 0 {
@@ -555,7 +559,9 @@ func (m Method) ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *d
 		return nil, err
 	}
 
-	m.logger.Info("Shard work stats", zap.Int("total_work", dA.total))
+	kd := currSch.GetKeyDescriptor()
+
+	m.logger.Info("Shard work stats", zap.Int("total_work", dA.total), zap.String("shard_desc", shard.DebugFormat(kd)))
 
 	return shardMgr.getShards(), nil
 }

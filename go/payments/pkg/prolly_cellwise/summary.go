@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"reflect"
 
@@ -34,6 +35,10 @@ var _ att.ShardInfo = (*AttributionShard)(nil)
 // todo (dhruv): is this key okay?
 func (as AttributionShard) Key(nbf *types.NomsBinFormat) string {
 	return as.Table + "-" + hashOfTuple(as.StartInclusive) + "_" + hashOfTuple(as.EndExclusive)
+}
+
+func (as AttributionShard) DebugFormat(kd val.TupleDesc) string {
+	return fmt.Sprintf("start: %s, end: %s", kd.Format(as.StartInclusive), kd.Format(as.EndExclusive))
 }
 
 func (as AttributionShard) Equals(other interface{}) bool {
