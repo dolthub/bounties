@@ -152,10 +152,10 @@ func TestProllyAttribution(t *testing.T) {
 					result, err := method.ProcessShard(ctx, int16(i), commit, prevCommit, shard)
 					require.NoError(t, err)
 
-					subshards := result.([]AttributionShard)
+					shardResults := result.([]AttributionShard)
 
-					if len(subshards) > 1 {
-						t.Logf("Subdivided shard into %d shards", len(subshards))
+					if len(shardResults) > 1 {
+						t.Logf("Subdivided shard into %d shards", len(shardResults))
 						for i, subShard := range result.([]AttributionShard) {
 
 							t.Logf("=== Sub shard %d ===", i+1)

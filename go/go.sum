@@ -128,6 +128,8 @@ github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZm
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
 github.com/dolthub/dolt/go v0.40.5-0.20220830233105-b7f711ce41c4 h1:VjKPBgR/9uzTr59Jlkly6Jr8coI1Muqt+ojyhrl6os4=
 github.com/dolthub/dolt/go v0.40.5-0.20220830233105-b7f711ce41c4/go.mod h1:d3yAXBN/gull9PDe5Z+87m81fjEGZ9/EcyzeILxz+2k=
+github.com/dolthub/dolt/go v0.40.5-0.20220831231039-015999ad39ea h1:NNOVGUOLBCIrcXLUXpyR1OTgX1bvKaAXBKHEQ6vgOzw=
+github.com/dolthub/dolt/go v0.40.5-0.20220831231039-015999ad39ea/go.mod h1:d3yAXBN/gull9PDe5Z+87m81fjEGZ9/EcyzeILxz+2k=
 github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078 h1:nrkoh/RcgTq5EsWTcbSBF8KQghCtM+1dhyslghbBoj8=
 github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078/go.mod h1:8Jdiq6CVg8HM4n9fF17sGgXUpFa98zDyscW0A7OQmuM=
 github.com/dolthub/flatbuffers v1.13.0-dh.1 h1:OWJdaPep22N52O/0xsUevxJ6Qfw1M2txCjZPOdjXybE=

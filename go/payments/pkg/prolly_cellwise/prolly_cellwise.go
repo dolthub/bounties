@@ -238,9 +238,8 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 	subDivisions = append(subDivisions, lastSub)
 	subdivisionKeys = append(subdivisionKeys, lastSub.Key(m.ddb.Format()))
 
-	m.logger.Info("Subdividing Shard", zap.String("shard_key", shard.Key(m.ddb.Format())), zap.Uint64("num_subdivisions", numSubs), zap.Uint64("sub_division_size", subDivisionStep), zap.Strings("subdivisions", subdivisionKeys))
+	m.logger.Info("Subdividing Shard", zap.String("shard_key", shard.Key(m.ddb.Format())), zap.Uint64("num_subdivisions", numSubs), zap.Uint64("sub_division_size", subDivisionStep))
 	return subDivisions, nil
-
 }
 
 func getRangeSize(ctx context.Context, m prolly.Map, shard AttributionShard) (uint64, error) {
@@ -555,6 +554,8 @@ func (m Method) ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *d
 	if err != nil {
 		return nil, err
 	}
+
+	m.logger.Info("Shard work stats", zap.Int("total_work", dA.total))
 
 	return shardMgr.getShards(), nil
 }
