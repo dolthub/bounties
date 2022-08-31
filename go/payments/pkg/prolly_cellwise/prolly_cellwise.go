@@ -130,8 +130,7 @@ func (m Method) collectShards(ctx context.Context, summary ProllyAttSummary, roo
 	for _, table := range tables {
 		shards, ok := summary.TableShards[table]
 		if !ok {
-			allShards = append(allShards, AttributionShard{Table: table})
-			continue
+			shards = []AttributionShard{{Table: table}}
 		}
 
 		hasDiffs, err := m.shardsHaveDiffs(ctx, shards, table, root, prevRoot)
