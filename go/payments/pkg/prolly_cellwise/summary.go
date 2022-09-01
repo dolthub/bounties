@@ -39,7 +39,7 @@ func (as AttributionShard) Key(nbf *types.NomsBinFormat) string {
 }
 
 func (as AttributionShard) DebugFormat(kd val.TupleDesc) string {
-	return fmt.Sprintf("expected size: %d, start: %s, end: %s", as.ExpectedSize, kd.Format(as.StartInclusive), kd.Format(as.EndExclusive))
+	return fmt.Sprintf("expected size: %d, start: %s, end (exclusive): %s", as.ExpectedSize, kd.Format(as.StartInclusive), kd.Format(as.EndExclusive))
 }
 
 func (as AttributionShard) Equals(other interface{}) bool {

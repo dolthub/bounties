@@ -209,7 +209,7 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 	start := shard.StartInclusive
 	var subdivisionKeys []string
 	for i := uint64(0); i < numSubs-1; i++ {
-
+		m.logger.Info(fmt.Sprintf("DHRUV subshard %d", i))
 		itr, err := subDivideRows.IterOrdinalRange(ctx, startIdx+subDivisionStep, startIdx+subDivisionStep+1)
 		if err != nil {
 			return nil, err
@@ -248,8 +248,16 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 				return nil, err
 			}
 		}
-
+		kd, _ := rowData.Descriptors()
+		m.logger.Info(fmt.Sprintf("DHRUV shard string: %s", newSub.DebugFormat(kd)))
 		m.logger.Info(fmt.Sprintf("DHRUV Max size: %d, Actual size for old: %d, Actual size for new: %d", subDivisionStep, oldSize, newSize))
+		if newSize > 21_000 {
+			realSize, startKey, endKey, err := getRealRangeSize(ctx, rowData, newSub)
+			if err != nil {
+				return nil, err
+			}
+			panic(fmt.Sprintf("REAL SIZE: %d, Start Key: %s, End Key (Inclusive): %s", realSize, kd.Format(startKey), kd.Format(endKey)))
+		}
 
 		start = k
 		startIdx += subDivisionStep
@@ -290,6 +298,37 @@ func getRangeSize(ctx context.Context, m prolly.Map, shard AttributionShard) (ui
 	}
 
 	return size, nil
+}
+
+func getRealRangeSize(ctx context.Context, m prolly.Map, shard AttributionShard) (uint64, val.Tuple, val.Tuple, error) {
+	kd, _ := m.Descriptors()
+	rng, err := getProllyRange(shard, kd)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+
+	itr, err := m.IterRange(ctx, *rng)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+
+	var cnt uint64
+	var firstKey val.Tuple
+	var currKey val.Tuple
+	for {
+		k, _, err := itr.Next(ctx)
+		if err != nil && err != io.EOF {
+			return 0, nil, nil, err
+		}
+		if err == io.EOF {
+			return cnt, firstKey, currKey, nil
+		}
+		if cnt == 0 {
+			firstKey = k
+		}
+		currKey = k
+		cnt++
+	}
 }
 
 func getRowData(ctx context.Context, table string, root *doltdb.RootValue) (prolly.Map, error) {
