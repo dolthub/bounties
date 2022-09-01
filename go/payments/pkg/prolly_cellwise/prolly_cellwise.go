@@ -232,6 +232,20 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 		subDivisions = append(subDivisions, newSub)
 		subdivisionKeys = append(subdivisionKeys, newSub.Key(m.ddb.Format()))
 
+		newSize, err := getRangeSize(ctx, rowData, newSub)
+		if err != nil {
+			return nil, err
+		}
+		var oldSize uint64
+		if prevRoot != nil {
+			oldSize, err = getRangeSize(ctx, prevRowData, newSub)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		m.logger.Info(fmt.Sprintf("DHRUV Max size: %d, Actual size for old: %d, Actual size for new: %d", subDivisionStep, oldSize, newSize))
+
 		start = k
 		startIdx += subDivisionStep
 	}
