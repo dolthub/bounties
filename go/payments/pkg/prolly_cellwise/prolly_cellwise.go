@@ -221,6 +221,11 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 			}
 			return nil, err
 		}
+		realOrd, err := subDivideRows.GetOrdinal(ctx, k)
+		if err != nil {
+			return nil, err
+		}
+		m.logger.Info(fmt.Sprintf("DHRUV expected ord: %d, real ord: %d", startIdx+subDivisionStep, realOrd))
 
 		newSub := AttributionShard{
 			Table:          shard.Table,
