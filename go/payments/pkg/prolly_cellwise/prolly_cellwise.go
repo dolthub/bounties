@@ -278,13 +278,7 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 }
 
 func getRealRangeSize(ctx context.Context, m prolly.Map, shard AttributionShard) (uint64, val.Tuple, val.Tuple, error) {
-	kd, _ := m.Descriptors()
-	rng, err := getProllyRange(shard, kd)
-	if err != nil {
-		return 0, nil, nil, err
-	}
-
-	itr, err := m.IterRange(ctx, *rng)
+	itr, err := m.IterKeyRange(ctx, shard.StartInclusive, shard.EndExclusive)
 	if err != nil {
 		return 0, nil, nil, err
 	}
@@ -441,16 +435,7 @@ func getDiffer(ctx context.Context, shard AttributionShard, tbl, prevTbl *doltdb
 		return nil, err
 	}
 
-	rng, err := getProllyRange(shard, toSch.GetKeyDescriptor())
-	if err != nil {
-		return nil, err
-	}
-
-	if rng != nil {
-		return doltutils.NewDiffIterRange(ctx, fromM, toM, *rng)
-	}
-
-	return doltutils.NewDiffIter(ctx, fromM, toM)
+	return doltutils.NewDiffIterKeyRange(ctx, fromM, toM, shard.StartInclusive, shard.EndExclusive)
 }
 
 func canDiffSchemas(format *types.NomsBinFormat, toSch, fromSch schema.Schema) error {
@@ -476,27 +461,6 @@ func canDiffSchemas(format *types.NomsBinFormat, toSch, fromSch schema.Schema) e
 	}
 
 	return nil
-}
-
-// getProllyRange returns a prolly.Range based on the |shard|. If
-// |StartInclusive| and |EndInclusive| is nil then a nil range is returned.
-func getProllyRange(shard AttributionShard, kd val.TupleDesc) (*prolly.Range, error) {
-	if len(shard.StartInclusive) == 0 && len(shard.EndExclusive) == 0 {
-		return nil, nil
-	}
-
-	if len(shard.StartInclusive) == 0 {
-		rng := prolly.LesserRange(shard.EndExclusive, kd)
-		return &rng, nil
-	}
-
-	if len(shard.EndExclusive) == 0 {
-		rng := prolly.GreaterOrEqualRange(shard.StartInclusive, kd)
-		return &rng, nil
-	}
-
-	rng := prolly.OpenStopRange(shard.StartInclusive, shard.EndExclusive, kd)
-	return &rng, nil
 }
 
 func (m Method) ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *doltdb.Commit, shardInfo att.ShardInfo) (att.ShardResult, error) {
@@ -581,7 +545,7 @@ func (m Method) ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *d
 		return nil, err
 	}
 
-	attribIter, err := makeAttribIter(ctx, prevAttribData, shard)
+	attribIter, err := prevAttribData.IterKeyRange(ctx, shard.StartInclusive, shard.EndExclusive)
 	if err != nil {
 		return nil, err
 	}
@@ -602,20 +566,6 @@ func (m Method) ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *d
 	m.logger.Info("Shard work stats", zap.Int("total_work", dA.total), zap.String("shard_desc", shard.DebugFormat(kd)))
 
 	return shardMgr.getShards(), nil
-}
-
-func makeAttribIter(ctx context.Context, prevAttribData prolly.Map, shard AttributionShard) (prolly.MapIter, error) {
-	kd, _ := prevAttribData.Descriptors()
-	rng, err := getProllyRange(shard, kd)
-	if err != nil {
-		return nil, err
-	}
-
-	if rng != nil {
-		return prevAttribData.IterRange(ctx, *rng)
-	}
-
-	return prevAttribData.IterAll(ctx)
 }
 
 func getAttribDescriptorsFromTblSchema(tblSch schema.Schema) (val.TupleDesc, val.TupleDesc) {
