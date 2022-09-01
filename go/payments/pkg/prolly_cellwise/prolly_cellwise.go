@@ -158,7 +158,7 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 		return nil, err
 	}
 
-	size, err := getRangeSize(ctx, rowData, shard)
+	size, err := rowData.GetKeyRangeCardinality(ctx, shard.StartInclusive, shard.EndExclusive)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +171,7 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 			return nil, err
 		}
 
-		prevSize, err = getRangeSize(ctx, prevRowData, shard)
+		prevSize, err = prevRowData.GetKeyRangeCardinality(ctx, shard.StartInclusive, shard.EndExclusive)
 		if err != nil {
 			return nil, err
 		}
@@ -198,9 +198,9 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 
 	m.logger.Info(fmt.Sprintf("DHRUV: dividing into steps of size %d", subDivisionStep))
 
-	var startIdx uint64
+	var startOrd uint64
 	if len(shard.StartInclusive) > 0 {
-		startIdx, err = subDivideRows.GetOrdinal(ctx, shard.StartInclusive)
+		startOrd, err = subDivideRows.GetOrdinalForKey(ctx, shard.StartInclusive)
 		if err != nil {
 			return nil, err
 		}
@@ -209,23 +209,24 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 	start := shard.StartInclusive
 	var subdivisionKeys []string
 	for i := uint64(0); i < numSubs-1; i++ {
-		m.logger.Info(fmt.Sprintf("DHRUV subshard %d, startOrd: %d, endOrd: %d", i, startIdx, startIdx+subDivisionStep))
-		itr, err := subDivideRows.IterOrdinalRange(ctx, startIdx+subDivisionStep, startIdx+subDivisionStep+1)
+		endOrd := startOrd + subDivisionStep
+		m.logger.Info(fmt.Sprintf("DHRUV subshard %d, startOrd: %d, endOrd: %d", i, startOrd, endOrd))
+		itr, err := subDivideRows.IterOrdinalRange(ctx, endOrd, endOrd+1)
 		if err != nil {
 			return nil, err
 		}
 		k, _, err := itr.Next(ctx)
 		if err != nil {
 			if err == io.EOF {
-				err = fmt.Errorf("expected to find key at ordinal range [%d, %d)", startIdx+subDivisionStep, startIdx+subDivisionStep+1)
+				err = fmt.Errorf("expected to find key at ordinal range [%d, %d)", endOrd, endOrd+1)
 			}
 			return nil, err
 		}
-		realOrd, err := subDivideRows.GetOrdinal(ctx, k)
+		realOrd, err := subDivideRows.GetOrdinalForKey(ctx, k)
 		if err != nil {
 			return nil, err
 		}
-		m.logger.Info(fmt.Sprintf("DHRUV expected endOrd: %d, real endOrd: %d", startIdx+subDivisionStep, realOrd))
+		m.logger.Info(fmt.Sprintf("DHRUV expected endOrd: %d, real endOrd: %d", endOrd, realOrd))
 
 		newSub := AttributionShard{
 			Table:          shard.Table,
@@ -237,13 +238,13 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 		subDivisions = append(subDivisions, newSub)
 		subdivisionKeys = append(subdivisionKeys, newSub.Key(m.ddb.Format()))
 
-		newSize, err := getRangeSize(ctx, rowData, newSub)
+		newSize, err := rowData.GetKeyRangeCardinality(ctx, newSub.StartInclusive, newSub.EndExclusive)
 		if err != nil {
 			return nil, err
 		}
 		var oldSize uint64
 		if prevRoot != nil {
-			oldSize, err = getRangeSize(ctx, prevRowData, newSub)
+			oldSize, err = rowData.GetKeyRangeCardinality(ctx, newSub.StartInclusive, newSub.EndExclusive)
 			if err != nil {
 				return nil, err
 			}
@@ -260,7 +261,7 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 		}
 
 		start = k
-		startIdx += subDivisionStep
+		startOrd += subDivisionStep
 	}
 
 	lastSub := AttributionShard{
@@ -274,30 +275,6 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 
 	m.logger.Info("Subdividing Shard", zap.String("shard_key", shard.Key(m.ddb.Format())), zap.Uint64("num_subdivisions", numSubs), zap.Uint64("sub_division_size", subDivisionStep))
 	return subDivisions, nil
-}
-
-func getRangeSize(ctx context.Context, m prolly.Map, shard AttributionShard) (uint64, error) {
-	kd, _ := m.Descriptors()
-	rng, err := getProllyRange(shard, kd)
-	if err != nil {
-		return 0, err
-	}
-
-	var size uint64
-	if rng != nil {
-		size, err = m.GetRangeCardinality(ctx, *rng)
-		if err != nil {
-			return 0, err
-		}
-	} else {
-		n, err := m.Count()
-		if err != nil {
-			return 0, err
-		}
-		size = uint64(n)
-	}
-
-	return size, nil
 }
 
 func getRealRangeSize(ctx context.Context, m prolly.Map, shard AttributionShard) (uint64, val.Tuple, val.Tuple, error) {
