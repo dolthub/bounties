@@ -209,7 +209,7 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 	start := shard.StartInclusive
 	var subdivisionKeys []string
 	for i := uint64(0); i < numSubs-1; i++ {
-		m.logger.Info(fmt.Sprintf("DHRUV subshard %d", i))
+		m.logger.Info(fmt.Sprintf("DHRUV subshard %d, startOrd: %d, endOrd: %d", i, startIdx, startIdx+subDivisionStep))
 		itr, err := subDivideRows.IterOrdinalRange(ctx, startIdx+subDivisionStep, startIdx+subDivisionStep+1)
 		if err != nil {
 			return nil, err
@@ -225,7 +225,7 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 		if err != nil {
 			return nil, err
 		}
-		m.logger.Info(fmt.Sprintf("DHRUV expected ord: %d, real ord: %d", startIdx+subDivisionStep, realOrd))
+		m.logger.Info(fmt.Sprintf("DHRUV expected endOrd: %d, real endOrd: %d", startIdx+subDivisionStep, realOrd))
 
 		newSub := AttributionShard{
 			Table:          shard.Table,
