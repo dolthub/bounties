@@ -251,7 +251,7 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 		kd, _ := rowData.Descriptors()
 		m.logger.Info(fmt.Sprintf("DHRUV shard string: %s", newSub.DebugFormat(kd)))
 		m.logger.Info(fmt.Sprintf("DHRUV Max size: %d, Actual size for old: %d, Actual size for new: %d", subDivisionStep, oldSize, newSize))
-		if newSize > 21_000 {
+		if newSize > 200_000 {
 			realSize, startKey, endKey, err := getRealRangeSize(ctx, rowData, newSub)
 			if err != nil {
 				return nil, err
