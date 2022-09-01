@@ -164,8 +164,9 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 	}
 
 	var prevSize uint64
+	var prevRowData prolly.Map
 	if prevRoot != nil {
-		prevRowData, err := getRowData(ctx, table, prevRoot)
+		prevRowData, err = getRowData(ctx, table, prevRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -176,9 +177,11 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 		}
 	}
 
+	subDivideRows := rowData
 	shardCardinality := size
 	if prevSize > size {
 		shardCardinality = prevSize
+		subDivideRows = prevRowData
 	}
 
 	m.logger.Info(fmt.Sprintf("DHRUV: shard cardinality %d", shardCardinality))
@@ -189,7 +192,6 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 	}
 
 	var subDivisions []att.ShardInfo
-	subDivideRows := rowData
 
 	numSubs := (shardCardinality / uint64(m.shardParams.RowsPerShard)) + 1
 	subDivisionStep := shardCardinality / numSubs
