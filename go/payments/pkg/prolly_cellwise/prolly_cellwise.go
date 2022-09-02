@@ -197,12 +197,10 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 		shardCardinality = prevSize
 		subDivideRows = prevRowData
 	}
-
-	kd, _ := rowData.Descriptors()
-	m.logger.Info(fmt.Sprintf("Shard (%s) cardinality %d", shard.DebugFormat(kd), shardCardinality))
+	shard.Cardinality = shardCardinality
 
 	if shardCardinality <= uint64(m.shardParams.RowsPerShard) {
-		m.logger.Info("not going to subdivide shard. Shard cardinality < RowsPerShard.", zap.Uint64("shard_cardinality", shardCardinality))
+		m.logger.Info("not going to subdivide shard. Shard cardinality <= RowsPerShard.", zap.Uint64("cardinality", shardCardinality))
 		return []att.ShardInfo{shard}, nil
 	}
 
@@ -210,8 +208,6 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 
 	numSubs := (shardCardinality / uint64(m.shardParams.RowsPerShard)) + 1
 	subDivisionStep := shardCardinality / numSubs
-
-	m.logger.Info(fmt.Sprintf("DHRUV: dividing into steps of size %d", subDivisionStep))
 
 	var startOrd uint64
 	if len(shard.StartInclusive) > 0 {
@@ -225,7 +221,10 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 	var subdivisionKeys []string
 	for i := uint64(0); i < numSubs-1; i++ {
 		endOrd := startOrd + subDivisionStep
-		m.logger.Info(fmt.Sprintf("Creating subshard %d, startOrd: %d, endOrd: %d", i, startOrd, endOrd))
+		m.logger.Info("Creating subshard",
+			zap.Uint64("start_ord", startOrd),
+			zap.Uint64("end_ord", endOrd),
+			zap.Uint64("cardinality", endOrd-startOrd))
 		itr, err := subDivideRows.IterOrdinalRange(ctx, endOrd, endOrd+1)
 		if err != nil {
 			return nil, err
@@ -243,6 +242,7 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 			Path:           shard.Path,
 			StartInclusive: start,
 			EndExclusive:   end,
+			Cardinality:    endOrd - startOrd,
 		}
 		subDivisions = append(subDivisions, newSub)
 		subdivisionKeys = append(subdivisionKeys, newSub.Key(m.ddb.Format()))
@@ -251,44 +251,33 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 		startOrd += subDivisionStep
 	}
 
+	var endOrd uint64
+	var cardinality uint64
+	if len(shard.EndExclusive) > 0 {
+		endOrd, err = subDivideRows.GetOrdinalForKey(ctx, shard.EndExclusive)
+		if err != nil {
+			return nil, err
+		}
+		cardinality = endOrd - startOrd
+	}
+
 	lastSub := AttributionShard{
 		Table:          shard.Table,
 		Path:           shard.Path,
 		StartInclusive: start,
 		EndExclusive:   shard.EndExclusive,
+		Cardinality:    cardinality,
 	}
 
-	m.logger.Info(fmt.Sprintf("Creating end shard %s", lastSub.DebugFormat(kd)))
+	m.logger.Info("Creating end shard",
+		zap.Uint64("start_ord", startOrd),
+		zap.Uint64("end_ord", endOrd),
+		zap.Uint64("cardinality", cardinality))
 	subDivisions = append(subDivisions, lastSub)
 	subdivisionKeys = append(subdivisionKeys, lastSub.Key(m.ddb.Format()))
 
 	m.logger.Info("Subdivided Shard", zap.String("shard_key", shard.Key(m.ddb.Format())), zap.Uint64("num_subdivisions", numSubs), zap.Uint64("sub_division_size", subDivisionStep))
 	return subDivisions, nil
-}
-
-func getRealRangeSize(ctx context.Context, m prolly.Map, shard AttributionShard) (uint64, val.Tuple, val.Tuple, error) {
-	itr, err := m.IterKeyRange(ctx, shard.StartInclusive, shard.EndExclusive)
-	if err != nil {
-		return 0, nil, nil, err
-	}
-
-	var cnt uint64
-	var firstKey val.Tuple
-	var currKey val.Tuple
-	for {
-		k, _, err := itr.Next(ctx)
-		if err != nil && err != io.EOF {
-			return 0, nil, nil, err
-		}
-		if err == io.EOF {
-			return cnt, firstKey, currKey, nil
-		}
-		if cnt == 0 {
-			firstKey = k
-		}
-		currKey = k
-		cnt++
-	}
 }
 
 func getRowData(ctx context.Context, table string, root *doltdb.RootValue) (prolly.Map, error) {

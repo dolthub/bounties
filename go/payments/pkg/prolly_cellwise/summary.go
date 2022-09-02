@@ -28,6 +28,8 @@ type AttributionShard struct {
 	Path string `json:"path"`
 	// CommitCounts is a slice of counts this shard has attributed to commits
 	CommitCounts []uint64 `json:"commit_counts"`
+	// How many rows this shard addresses
+	Cardinality uint64 `json:"cardinality"`
 }
 
 var _ att.ShardInfo = (*AttributionShard)(nil)
