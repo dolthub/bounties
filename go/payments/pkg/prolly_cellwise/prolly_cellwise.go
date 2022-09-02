@@ -539,16 +539,19 @@ func (m Method) ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *d
 		return nil, err
 	}
 
-	shard, err = shardMgr.close(ctx)
+	outShard, err := shardMgr.close(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	kd := currSch.GetKeyDescriptor()
 
-	m.logger.Info("Shard work stats", zap.Int("total_work", dA.total), zap.String("shard_desc", shard.DebugFormat(kd)))
+	m.logger.Info("Shard work stats",
+		zap.Int("attributions", dA.total),
+		zap.Uint64("cardinality", shard.Cardinality),
+		zap.String("range_debug", shard.DebugFormat(kd)))
 
-	return []AttributionShard{shard}, nil
+	return []AttributionShard{outShard}, nil
 }
 
 func getAttribDescriptorsFromTblSchema(tblSch schema.Schema) (val.TupleDesc, val.TupleDesc) {
