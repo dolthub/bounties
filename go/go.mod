@@ -3,7 +3,7 @@ module github.com/dolthub/bounties/go
 go 1.19
 
 require (
-	github.com/dolthub/dolt/go v0.40.5-0.20220902192128-f6a8b6fd0529
+	github.com/dolthub/dolt/go v0.40.5-0.20220902221117-ee83ce4cf0e9
 	github.com/pkg/profile v1.5.0
 	github.com/stretchr/testify v1.7.1
 	go.uber.org/zap v1.15.0
