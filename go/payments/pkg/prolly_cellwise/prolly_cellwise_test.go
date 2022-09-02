@@ -65,7 +65,7 @@ func TestProllyAttribution(t *testing.T) {
 		{
 			"100 rows per shard",
 			ProllyAttShardParams{
-				RowsPerShard: 500,
+				RowsPerShard: 100,
 			},
 		},
 		{

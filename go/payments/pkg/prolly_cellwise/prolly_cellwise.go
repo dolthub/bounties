@@ -158,14 +158,6 @@ func (m Method) collectShards(ctx context.Context, summary ProllyAttSummary, roo
 	return allShards, nil
 }
 
-func (m Method) unwrapShards(in []att.ShardInfo) []AttributionShard {
-	out := make([]AttributionShard, len(in))
-	for i, v := range in {
-		out[i] = v.(AttributionShard)
-	}
-	return out
-}
-
 func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, table string, root *doltdb.RootValue, prevRoot *doltdb.RootValue) ([]att.ShardInfo, error) {
 	rowData, err := getRowData(ctx, table, root)
 	if err != nil {
@@ -218,7 +210,6 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 	}
 
 	start := shard.StartInclusive
-	var subdivisionKeys []string
 	for i := uint64(0); i < numSubs-1; i++ {
 		endOrd := startOrd + subDivisionStep
 		m.logger.Info("Creating subshard",
@@ -245,7 +236,6 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 			Cardinality:    endOrd - startOrd,
 		}
 		subDivisions = append(subDivisions, newSub)
-		subdivisionKeys = append(subdivisionKeys, newSub.Key(m.ddb.Format()))
 
 		start = end
 		startOrd += subDivisionStep
@@ -274,7 +264,6 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 		zap.Uint64("end_ord", endOrd),
 		zap.Uint64("cardinality", cardinality))
 	subDivisions = append(subDivisions, lastSub)
-	subdivisionKeys = append(subdivisionKeys, lastSub.Key(m.ddb.Format()))
 
 	m.logger.Info("Subdivided Shard", zap.String("shard_key", shard.Key(m.ddb.Format())), zap.Uint64("num_subdivisions", numSubs), zap.Uint64("sub_division_size", subDivisionStep))
 	return subDivisions, nil

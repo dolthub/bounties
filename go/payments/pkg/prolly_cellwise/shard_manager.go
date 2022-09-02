@@ -95,7 +95,7 @@ func (sm *prollyShardManager) addRowAtt(ctx context.Context, key val.Tuple, ra p
 	return nil
 }
 
-// called when all attribution is done for the input shard
+// called when all attribution work is done for the input shard
 func (sm *prollyShardManager) close(ctx context.Context) (AttributionShard, error) {
 	start := time.Now()
 	sm.logger.Info("closing and persisting shard")
@@ -136,8 +136,6 @@ func (sm *prollyShardManager) close(ctx context.Context) (AttributionShard, erro
 	return shard, nil
 }
 
-// create a new chunk store and streaming map in order to be able to stream row attribution values to the map containing
-// sharded attribution ddata
 func (sm *prollyShardManager) openShard(ctx context.Context) error {
 	var err error
 	sm.currStore, err = valuefile.NewFileValueStore(sm.nbf)
