@@ -116,19 +116,6 @@ func prollyGenTableState(ctx context.Context, ns tree.NodeStore) ([]tableState, 
 
 	// ========== STATE B ==========
 	mut = m.Mutate()
-	// Adds 100 new rows with 3 columns (pk, col1, col2)
-	for i := uint64(1000); i < 1100; i++ {
-		kb.PutUint64(0, i)
-		k := kb.Build(sharedPool)
-		vb.PutString(0, "b")
-		vb.PutString(1, "b")
-		v := vb.Build(sharedPool)
-
-		err = mut.Put(ctx, k, v)
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	// Delete 100 rows (pks 0 - 99)
 	for i := uint64(0); i < 100; i++ {
@@ -147,6 +134,20 @@ func prollyGenTableState(ctx context.Context, ns tree.NodeStore) ([]tableState, 
 
 	// Modify col1 of 100 old rows and add col2 (pks 100 - 199)
 	for i := uint64(100); i < 200; i++ {
+		kb.PutUint64(0, i)
+		k := kb.Build(sharedPool)
+		vb.PutString(0, "b")
+		vb.PutString(1, "b")
+		v := vb.Build(sharedPool)
+
+		err = mut.Put(ctx, k, v)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Adds 100 new rows with 3 columns (pk, col1, col2)
+	for i := uint64(1000); i < 1100; i++ {
 		kb.PutUint64(0, i)
 		k := kb.Build(sharedPool)
 		vb.PutString(0, "b")

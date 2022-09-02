@@ -128,6 +128,8 @@ func (m Method) collectShards(ctx context.Context, summary ProllyAttSummary, roo
 		shards, ok := summary.TableShards[table]
 		if !ok {
 			shards = []AttributionShard{{Table: table}}
+			//allShards = append(allShards, AttributionShard{Table: table})
+			//continue
 		}
 
 		hasDiffs, err := m.shardsHaveDiffs(ctx, shards, table, root, prevRoot)
@@ -142,14 +144,26 @@ func (m Method) collectShards(ctx context.Context, summary ProllyAttSummary, roo
 					return nil, err
 				}
 
+				// If we subdivide a shard, we have to do work to redistribute
+				// the commit counts. So we can't check if they have diffs and
+				// exclude them.
 				allShards = append(allShards, subDivided...)
 			} else {
+				m.logger.Info(fmt.Sprintf("Shard %d has no diffs", i))
 				allShards = append(allShards, UnchangedShard{shards[i]})
 			}
 		}
 	}
 
 	return allShards, nil
+}
+
+func (m Method) unwrapShards(in []att.ShardInfo) []AttributionShard {
+	out := make([]AttributionShard, len(in))
+	for i, v := range in {
+		out[i] = v.(AttributionShard)
+	}
+	return out
 }
 
 func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, table string, root *doltdb.RootValue, prevRoot *doltdb.RootValue) ([]att.ShardInfo, error) {
@@ -184,9 +198,10 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 		subDivideRows = prevRowData
 	}
 
-	m.logger.Info(fmt.Sprintf("DHRUV: shard cardinality %d", shardCardinality))
+	kd, _ := rowData.Descriptors()
+	m.logger.Info(fmt.Sprintf("Shard (%s) cardinality %d", shard.DebugFormat(kd), shardCardinality))
 
-	if shardCardinality < uint64(m.shardParams.RowsPerShard) {
+	if shardCardinality <= uint64(m.shardParams.RowsPerShard) {
 		m.logger.Info("not going to subdivide shard. Shard cardinality < RowsPerShard.", zap.Uint64("shard_cardinality", shardCardinality))
 		return []att.ShardInfo{shard}, nil
 	}
@@ -210,57 +225,29 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 	var subdivisionKeys []string
 	for i := uint64(0); i < numSubs-1; i++ {
 		endOrd := startOrd + subDivisionStep
-		m.logger.Info(fmt.Sprintf("DHRUV subshard %d, startOrd: %d, endOrd: %d", i, startOrd, endOrd))
+		m.logger.Info(fmt.Sprintf("Creating subshard %d, startOrd: %d, endOrd: %d", i, startOrd, endOrd))
 		itr, err := subDivideRows.IterOrdinalRange(ctx, endOrd, endOrd+1)
 		if err != nil {
 			return nil, err
 		}
-		k, _, err := itr.Next(ctx)
+		end, _, err := itr.Next(ctx)
 		if err != nil {
 			if err == io.EOF {
 				err = fmt.Errorf("expected to find key at ordinal range [%d, %d)", endOrd, endOrd+1)
 			}
 			return nil, err
 		}
-		realOrd, err := subDivideRows.GetOrdinalForKey(ctx, k)
-		if err != nil {
-			return nil, err
-		}
-		m.logger.Info(fmt.Sprintf("DHRUV expected endOrd: %d, real endOrd: %d", endOrd, realOrd))
 
 		newSub := AttributionShard{
 			Table:          shard.Table,
 			Path:           shard.Path,
 			StartInclusive: start,
-			EndExclusive:   k,
-			ExpectedSize:   subDivisionStep,
+			EndExclusive:   end,
 		}
 		subDivisions = append(subDivisions, newSub)
 		subdivisionKeys = append(subdivisionKeys, newSub.Key(m.ddb.Format()))
 
-		newSize, err := rowData.GetKeyRangeCardinality(ctx, newSub.StartInclusive, newSub.EndExclusive)
-		if err != nil {
-			return nil, err
-		}
-		var oldSize uint64
-		if prevRoot != nil {
-			oldSize, err = rowData.GetKeyRangeCardinality(ctx, newSub.StartInclusive, newSub.EndExclusive)
-			if err != nil {
-				return nil, err
-			}
-		}
-		kd, _ := rowData.Descriptors()
-		m.logger.Info(fmt.Sprintf("DHRUV shard string: %s", newSub.DebugFormat(kd)))
-		m.logger.Info(fmt.Sprintf("DHRUV Max size: %d, Actual size for old: %d, Actual size for new: %d", subDivisionStep, oldSize, newSize))
-		if newSize > 200_000 {
-			realSize, startKey, endKey, err := getRealRangeSize(ctx, rowData, newSub)
-			if err != nil {
-				return nil, err
-			}
-			panic(fmt.Sprintf("REAL SIZE: %d, Start Key: %s, End Key (Inclusive): %s", realSize, kd.Format(startKey), kd.Format(endKey)))
-		}
-
-		start = k
+		start = end
 		startOrd += subDivisionStep
 	}
 
@@ -270,10 +257,12 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 		StartInclusive: start,
 		EndExclusive:   shard.EndExclusive,
 	}
+
+	m.logger.Info(fmt.Sprintf("Creating end shard %s", lastSub.DebugFormat(kd)))
 	subDivisions = append(subDivisions, lastSub)
 	subdivisionKeys = append(subdivisionKeys, lastSub.Key(m.ddb.Format()))
 
-	m.logger.Info("Subdividing Shard", zap.String("shard_key", shard.Key(m.ddb.Format())), zap.Uint64("num_subdivisions", numSubs), zap.Uint64("sub_division_size", subDivisionStep))
+	m.logger.Info("Subdivided Shard", zap.String("shard_key", shard.Key(m.ddb.Format())), zap.Uint64("num_subdivisions", numSubs), zap.Uint64("sub_division_size", subDivisionStep))
 	return subDivisions, nil
 }
 
@@ -550,13 +539,18 @@ func (m Method) ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *d
 		return nil, err
 	}
 
+	err = shardMgr.openShard(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// Walk iters in parallel
 	err = dA.attributeDiffs(ctx, diffIter, attribIter)
 	if err != nil {
 		return nil, err
 	}
 
-	err = shardMgr.close(ctx)
+	shard, err = shardMgr.close(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -565,7 +559,7 @@ func (m Method) ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *d
 
 	m.logger.Info("Shard work stats", zap.Int("total_work", dA.total), zap.String("shard_desc", shard.DebugFormat(kd)))
 
-	return shardMgr.getShards(), nil
+	return []AttributionShard{shard}, nil
 }
 
 func getAttribDescriptorsFromTblSchema(tblSch schema.Schema) (val.TupleDesc, val.TupleDesc) {
@@ -588,7 +582,7 @@ func (m Method) readShardFile(ctx context.Context, shard AttributionShard, tblSc
 	shardKey := shard.Key(m.ddb.Format())
 	m.logger.Info("Reading shard", zap.String("shard_key", shardKey))
 	defer func() {
-		m.logger.Info("Reading shard", zap.String("shard_key", shardKey), zap.Duration("took", time.Since(start)))
+		m.logger.Info("Done reading shard", zap.String("shard_key", shardKey), zap.Duration("took", time.Since(start)))
 	}()
 
 	memShard, err := m.shardStore.ReadShard(ctx, shard.Path)
