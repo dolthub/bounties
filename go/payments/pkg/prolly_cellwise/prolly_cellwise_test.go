@@ -59,25 +59,25 @@ func TestProllyAttribution(t *testing.T) {
 		{
 			"Million rows per shard",
 			ProllyAttShardParams{
-				RowsPerShard: 1_000_000,
+				MaximumShardCardinality: 1_000_000,
 			},
 		},
 		{
 			"100 rows per shard",
 			ProllyAttShardParams{
-				RowsPerShard: 100,
+				MaximumShardCardinality: 100,
 			},
 		},
 		{
 			"31 rows per shard",
 			ProllyAttShardParams{
-				RowsPerShard: 31,
+				MaximumShardCardinality: 31,
 			},
 		},
 		{
 			"101 rows per shard",
 			ProllyAttShardParams{
-				RowsPerShard: 101,
+				MaximumShardCardinality: 101,
 			},
 		},
 	}

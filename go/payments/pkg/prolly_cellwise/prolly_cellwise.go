@@ -41,8 +41,9 @@ import (
 
 // ProllyAttShardParams control the dynamic sharding behavior
 type ProllyAttShardParams struct {
-	// RowsPerShard define the count at which point a shard is cut and a new one starts
-	RowsPerShard int
+	// MaximumShardCardinality controls the maximum cardinality of a shard's key
+	// range.
+	MaximumShardCardinality int
 }
 
 // Method implements att.AttributionMethod
@@ -128,8 +129,6 @@ func (m Method) collectShards(ctx context.Context, summary ProllyAttSummary, roo
 		shards, ok := summary.TableShards[table]
 		if !ok {
 			shards = []AttributionShard{{Table: table}}
-			//allShards = append(allShards, AttributionShard{Table: table})
-			//continue
 		}
 
 		hasDiffs, err := m.shardsHaveDiffs(ctx, shards, table, root, prevRoot)
@@ -191,14 +190,14 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 	}
 	shard.Cardinality = shardCardinality
 
-	if shardCardinality <= uint64(m.shardParams.RowsPerShard) {
-		m.logger.Info("not going to subdivide shard. Shard cardinality <= RowsPerShard.", zap.Uint64("cardinality", shardCardinality))
+	if shardCardinality <= uint64(m.shardParams.MaximumShardCardinality) {
+		m.logger.Info("not going to subdivide shard. Shard cardinality <= MaximumShardCardinality.", zap.Uint64("cardinality", shardCardinality))
 		return []att.ShardInfo{shard}, nil
 	}
 
 	var subDivisions []att.ShardInfo
 
-	numSubs := (shardCardinality / uint64(m.shardParams.RowsPerShard)) + 1
+	numSubs := (shardCardinality / uint64(m.shardParams.MaximumShardCardinality)) + 1
 	subDivisionStep := shardCardinality / numSubs
 
 	var startOrd uint64
