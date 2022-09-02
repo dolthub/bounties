@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"reflect"
 
@@ -27,6 +28,8 @@ type AttributionShard struct {
 	Path string `json:"path"`
 	// CommitCounts is a slice of counts this shard has attributed to commits
 	CommitCounts []uint64 `json:"commit_counts"`
+	// How many rows this shard addresses
+	Cardinality uint64 `json:"cardinality"`
 }
 
 var _ att.ShardInfo = (*AttributionShard)(nil)
@@ -34,6 +37,10 @@ var _ att.ShardInfo = (*AttributionShard)(nil)
 // todo (dhruv): is this key okay?
 func (as AttributionShard) Key(nbf *types.NomsBinFormat) string {
 	return as.Table + "-" + hashOfTuple(as.StartInclusive) + "_" + hashOfTuple(as.EndExclusive)
+}
+
+func (as AttributionShard) DebugFormat(kd val.TupleDesc) string {
+	return fmt.Sprintf("start: %s, end (exclusive): %s", kd.Format(as.StartInclusive), kd.Format(as.EndExclusive))
 }
 
 func (as AttributionShard) Equals(other interface{}) bool {

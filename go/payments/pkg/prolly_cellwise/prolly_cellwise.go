@@ -41,12 +41,9 @@ import (
 
 // ProllyAttShardParams control the dynamic sharding behavior
 type ProllyAttShardParams struct {
-	// RowsPerShard define the count at which point a shard is cut and a new one starts
-	RowsPerShard int
-	// MinShardSize uint64 need to implement
-
-	// TODO (dhruv): maybe implement diff subdivisions
-	// SubdivideDiffsSize int64
+	// MaximumShardCardinality controls the maximum cardinality of a shard's key
+	// range.
+	MaximumShardCardinality int
 }
 
 // Method implements att.AttributionMethod
@@ -131,8 +128,7 @@ func (m Method) collectShards(ctx context.Context, summary ProllyAttSummary, roo
 	for _, table := range tables {
 		shards, ok := summary.TableShards[table]
 		if !ok {
-			allShards = append(allShards, AttributionShard{Table: table})
-			continue
+			shards = []AttributionShard{{Table: table}}
 		}
 
 		hasDiffs, err := m.shardsHaveDiffs(ctx, shards, table, root, prevRoot)
@@ -142,15 +138,149 @@ func (m Method) collectShards(ctx context.Context, summary ProllyAttSummary, roo
 
 		for i := range shards {
 			if hasDiffs[i] {
-				// TODO (dhruv) subdivide shards?
-				allShards = append(allShards, shards[i])
+				subDivided, err := m.subdivideShard(ctx, shards[i], table, root, prevRoot)
+				if err != nil {
+					return nil, err
+				}
+
+				// If we subdivide a shard, we have to do work to redistribute
+				// the commit counts. So we can't check if they have diffs and
+				// exclude them.
+				allShards = append(allShards, subDivided...)
 			} else {
+				m.logger.Info(fmt.Sprintf("Shard %d has no diffs", i))
 				allShards = append(allShards, UnchangedShard{shards[i]})
 			}
 		}
 	}
 
 	return allShards, nil
+}
+
+func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, table string, root *doltdb.RootValue, prevRoot *doltdb.RootValue) ([]att.ShardInfo, error) {
+	rowData, err := getRowData(ctx, table, root)
+	if err != nil {
+		return nil, err
+	}
+
+	size, err := rowData.GetKeyRangeCardinality(ctx, shard.StartInclusive, shard.EndExclusive)
+	if err != nil {
+		return nil, err
+	}
+
+	var prevSize uint64
+	var prevRowData prolly.Map
+	if prevRoot != nil {
+		prevRowData, err = getRowData(ctx, table, prevRoot)
+		if err != nil {
+			return nil, err
+		}
+
+		prevSize, err = prevRowData.GetKeyRangeCardinality(ctx, shard.StartInclusive, shard.EndExclusive)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	subDivideRows := rowData
+	shardCardinality := size
+	if prevSize > size {
+		shardCardinality = prevSize
+		subDivideRows = prevRowData
+	}
+	shard.Cardinality = shardCardinality
+
+	if shardCardinality <= uint64(m.shardParams.MaximumShardCardinality) {
+		m.logger.Info("not going to subdivide shard. Shard cardinality <= MaximumShardCardinality.", zap.Uint64("cardinality", shardCardinality))
+		return []att.ShardInfo{shard}, nil
+	}
+
+	var subDivisions []att.ShardInfo
+
+	numSubs := (shardCardinality / uint64(m.shardParams.MaximumShardCardinality)) + 1
+	subDivisionStep := shardCardinality / numSubs
+
+	var startOrd uint64
+	if len(shard.StartInclusive) > 0 {
+		startOrd, err = subDivideRows.GetOrdinalForKey(ctx, shard.StartInclusive)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	start := shard.StartInclusive
+	for i := uint64(0); i < numSubs-1; i++ {
+		endOrd := startOrd + subDivisionStep
+		m.logger.Info("Creating subshard",
+			zap.Uint64("start_ord", startOrd),
+			zap.Uint64("end_ord", endOrd),
+			zap.Uint64("cardinality", endOrd-startOrd))
+		itr, err := subDivideRows.IterOrdinalRange(ctx, endOrd, endOrd+1)
+		if err != nil {
+			return nil, err
+		}
+		end, _, err := itr.Next(ctx)
+		if err != nil {
+			if err == io.EOF {
+				err = fmt.Errorf("expected to find key at ordinal range [%d, %d)", endOrd, endOrd+1)
+			}
+			return nil, err
+		}
+
+		newSub := AttributionShard{
+			Table:          shard.Table,
+			Path:           shard.Path,
+			StartInclusive: start,
+			EndExclusive:   end,
+			Cardinality:    endOrd - startOrd,
+		}
+		subDivisions = append(subDivisions, newSub)
+
+		start = end
+		startOrd += subDivisionStep
+	}
+
+	var endOrd uint64
+	var cardinality uint64
+	if len(shard.EndExclusive) > 0 {
+		endOrd, err = subDivideRows.GetOrdinalForKey(ctx, shard.EndExclusive)
+		if err != nil {
+			return nil, err
+		}
+		cardinality = endOrd - startOrd
+	}
+
+	lastSub := AttributionShard{
+		Table:          shard.Table,
+		Path:           shard.Path,
+		StartInclusive: start,
+		EndExclusive:   shard.EndExclusive,
+		Cardinality:    cardinality,
+	}
+
+	m.logger.Info("Creating end shard",
+		zap.Uint64("start_ord", startOrd),
+		zap.Uint64("end_ord", endOrd),
+		zap.Uint64("cardinality", cardinality))
+	subDivisions = append(subDivisions, lastSub)
+
+	m.logger.Info("Subdivided Shard", zap.String("shard_key", shard.Key(m.ddb.Format())), zap.Uint64("num_subdivisions", numSubs), zap.Uint64("sub_division_size", subDivisionStep))
+	return subDivisions, nil
+}
+
+func getRowData(ctx context.Context, table string, root *doltdb.RootValue) (prolly.Map, error) {
+	tbl, _, ok, err := root.GetTableInsensitive(ctx, table)
+	if err != nil {
+		return prolly.Map{}, err
+	}
+	if !ok {
+		return prolly.Map{}, fmt.Errorf("could not find table %s in root", table)
+	}
+	idx, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return prolly.Map{}, err
+	}
+	return durable.ProllyMapFromIndex(idx), nil
 }
 
 // looks at whether the table has changed.  If it has changed, it then looks to see if their are diffs that touch the
@@ -171,15 +301,18 @@ func (m Method) shardsHaveDiffs(ctx context.Context, shards []AttributionShard, 
 		}
 	}
 
-	prevTbl, ok, err := prevRoot.GetTable(ctx, table)
-	if err != nil {
-		return nil, err
-	}
-
-	if ok {
-		prevTblHash, err = prevTbl.HashOf()
+	var prevTbl *doltdb.Table
+	if prevRoot != nil {
+		prevTbl, ok, err = prevRoot.GetTable(ctx, table)
 		if err != nil {
 			return nil, err
+		}
+
+		if ok {
+			prevTblHash, err = prevTbl.HashOf()
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -268,16 +401,7 @@ func getDiffer(ctx context.Context, shard AttributionShard, tbl, prevTbl *doltdb
 		return nil, err
 	}
 
-	rng, err := getProllyRange(shard, toSch.GetKeyDescriptor())
-	if err != nil {
-		return nil, err
-	}
-
-	if rng != nil {
-		return doltutils.NewDiffIterRange(ctx, fromM, toM, *rng)
-	}
-
-	return doltutils.NewDiffIter(ctx, fromM, toM)
+	return doltutils.NewDiffIterKeyRange(ctx, fromM, toM, shard.StartInclusive, shard.EndExclusive)
 }
 
 func canDiffSchemas(format *types.NomsBinFormat, toSch, fromSch schema.Schema) error {
@@ -303,27 +427,6 @@ func canDiffSchemas(format *types.NomsBinFormat, toSch, fromSch schema.Schema) e
 	}
 
 	return nil
-}
-
-// getProllyRange returns a prolly.Range based on the |shard|. If
-// |StartInclusive| and |EndInclusive| is nil then a nil range is returned.
-func getProllyRange(shard AttributionShard, kd val.TupleDesc) (*prolly.Range, error) {
-	if len(shard.StartInclusive) == 0 && len(shard.EndExclusive) == 0 {
-		return nil, nil
-	}
-
-	if len(shard.StartInclusive) == 0 {
-		rng := prolly.LesserRange(shard.EndExclusive, kd)
-		return &rng, nil
-	}
-
-	if len(shard.EndExclusive) == 0 {
-		rng := prolly.GreaterOrEqualRange(shard.StartInclusive, kd)
-		return &rng, nil
-	}
-
-	rng := prolly.OpenStopRange(shard.StartInclusive, shard.EndExclusive, kd)
-	return &rng, nil
 }
 
 func (m Method) ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *doltdb.Commit, shardInfo att.ShardInfo) (att.ShardResult, error) {
@@ -408,7 +511,12 @@ func (m Method) ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *d
 		return nil, err
 	}
 
-	attribIter, err := makeAttribIter(ctx, prevAttribData, shard)
+	attribIter, err := prevAttribData.IterKeyRange(ctx, shard.StartInclusive, shard.EndExclusive)
+	if err != nil {
+		return nil, err
+	}
+
+	err = shardMgr.openShard(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -419,26 +527,19 @@ func (m Method) ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *d
 		return nil, err
 	}
 
-	err = shardMgr.close(ctx)
+	outShard, err := shardMgr.close(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return shardMgr.getShards(), nil
-}
+	kd := currSch.GetKeyDescriptor()
 
-func makeAttribIter(ctx context.Context, prevAttribData prolly.Map, shard AttributionShard) (prolly.MapIter, error) {
-	kd, _ := prevAttribData.Descriptors()
-	rng, err := getProllyRange(shard, kd)
-	if err != nil {
-		return nil, err
-	}
+	m.logger.Info("Shard work stats",
+		zap.Int("attributions", dA.total),
+		zap.Uint64("cardinality", shard.Cardinality),
+		zap.String("range_debug", shard.DebugFormat(kd)))
 
-	if rng != nil {
-		return prevAttribData.IterRange(ctx, *rng)
-	}
-
-	return prevAttribData.IterAll(ctx)
+	return []AttributionShard{outShard}, nil
 }
 
 func getAttribDescriptorsFromTblSchema(tblSch schema.Schema) (val.TupleDesc, val.TupleDesc) {
@@ -461,7 +562,7 @@ func (m Method) readShardFile(ctx context.Context, shard AttributionShard, tblSc
 	shardKey := shard.Key(m.ddb.Format())
 	m.logger.Info("Reading shard", zap.String("shard_key", shardKey))
 	defer func() {
-		m.logger.Info("Reading shard", zap.String("shard_key", shardKey), zap.Duration("took", time.Since(start)))
+		m.logger.Info("Done reading shard", zap.String("shard_key", shardKey), zap.Duration("took", time.Since(start)))
 	}()
 
 	memShard, err := m.shardStore.ReadShard(ctx, shard.Path)

@@ -11,7 +11,6 @@ import (
 	"github.com/dolthub/bounties/go/payments/pkg/doltutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/dolt/go/store/val"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -60,25 +59,25 @@ func TestProllyAttribution(t *testing.T) {
 		{
 			"Million rows per shard",
 			ProllyAttShardParams{
-				RowsPerShard: 1_000_000,
+				MaximumShardCardinality: 1_000_000,
 			},
 		},
 		{
 			"100 rows per shard",
 			ProllyAttShardParams{
-				RowsPerShard: 100,
-			},
-		},
-		{
-			"100 rows per shard",
-			ProllyAttShardParams{
-				RowsPerShard: 100,
+				MaximumShardCardinality: 100,
 			},
 		},
 		{
 			"31 rows per shard",
 			ProllyAttShardParams{
-				RowsPerShard: 31,
+				MaximumShardCardinality: 31,
+			},
+		},
+		{
+			"101 rows per shard",
+			ProllyAttShardParams{
+				MaximumShardCardinality: 101,
 			},
 		},
 	}
@@ -102,8 +101,6 @@ func TestProllyAttribution(t *testing.T) {
 			require.NoError(t, err)
 			method := NewMethod(logger, dEnv.DoltDB, startOfBountyHash, shardStore, test.shardParams)
 			require.Equal(t, len(expected), len(commits))
-
-			kd := attteststate.AttSch.GetKeyDescriptor()
 
 			var prevSummary att.Summary = emptySummary(startOfBountyHash)
 			var prevCommit *doltdb.Commit
@@ -131,38 +128,14 @@ func TestProllyAttribution(t *testing.T) {
 					}
 				}
 
-				strer := func(k val.Tuple) string {
-					if len(k) == 0 {
-						return "none"
-					}
-
-					return kd.Format(k)
-				}
-
 				var results []att.ShardResult
 				for _, shard := range shards {
-
-					rShard, ok := shard.(AttributionShard)
-					if ok {
-						t.Logf("Processing shard")
-						t.Log("Start Inclusive:", strer(rShard.StartInclusive))
-						t.Log("End Exclusive:", strer(rShard.EndExclusive))
-					}
-
 					result, err := method.ProcessShard(ctx, int16(i), commit, prevCommit, shard)
 					require.NoError(t, err)
-
-					subshards := result.([]AttributionShard)
-
-					if len(subshards) > 1 {
-						t.Logf("Subdivided shard into %d shards", len(subshards))
-						for i, subShard := range result.([]AttributionShard) {
-
-							t.Logf("=== Sub shard %d ===", i+1)
-							t.Log("Start Inclusive:", strer(subShard.StartInclusive))
-							t.Log("End Exclusive:", strer(subShard.EndExclusive))
-						}
-					}
+					require.NotNil(t, result)
+					require.Len(t, result.([]AttributionShard), 1)
+					shard := result.([]AttributionShard)[0]
+					require.NotNil(t, shard.CommitCounts)
 
 					results = append(results, result)
 				}
@@ -194,6 +167,7 @@ func TestProllyAttribution(t *testing.T) {
 				prevSummary, err = method.ReadSummary(ctx, summaryKey)
 				require.NoError(t, err)
 
+				t.Logf("============= COMMIT: %s DONE =============", commitHash.String())
 				prevCommit = commit
 			}
 		})
