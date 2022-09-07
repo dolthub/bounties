@@ -37,6 +37,7 @@ type diffAttributor struct {
 	logger           *zap.Logger
 	format           *types.NomsBinFormat
 	kd               val.TupleDesc
+	vd               val.TupleDesc
 	attVd            val.TupleDesc
 
 	newData       int
@@ -75,6 +76,7 @@ func newDiffAttributor(
 	}
 
 	kd, attVd := getAttribDescriptorsFromTblSchema(tblSch)
+	vd := tblSch.GetValueDescriptor()
 
 	return &diffAttributor{
 		tblSch:    tblSch,
@@ -86,6 +88,7 @@ func newDiffAttributor(
 		logger:    logger,
 		format:    format,
 		kd:        kd,
+		vd:        vd,
 		attVd:     attVd,
 	}, nil
 }
@@ -183,7 +186,7 @@ func (dA *diffAttributor) createAttrib(ctx context.Context, diff tree.Diff) erro
 	}
 
 	ra := make(prollyRowAtt, dA.attVd.Count())
-	err := ra.updateFromDiff(dA.kd, dA.commitIdx, diff)
+	err := ra.updateFromDiff(dA.kd, dA.vd, dA.commitIdx, diff)
 	if err != nil {
 		return err
 	}
@@ -214,7 +217,7 @@ func (dA *diffAttributor) updateAttrib(ctx context.Context, diff tree.Diff, attV
 
 	ra := prollyRowAttFromValue(dA.attVd, attVal)
 
-	err := ra.updateFromDiff(dA.kd, dA.commitIdx, diff)
+	err := ra.updateFromDiff(dA.kd, dA.vd, dA.commitIdx, diff)
 	if err != nil {
 		return err
 	}

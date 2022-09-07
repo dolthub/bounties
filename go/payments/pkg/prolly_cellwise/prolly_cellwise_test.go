@@ -19,26 +19,26 @@ func getCellwiseExpected() [][]uint64 {
 	var expected [][]uint64
 
 	// Expected Scoreboard:
-	// Commit A: 2*1000 new = 2000
-	expected = append(expected, []uint64{2000})
+	// Commit A: 1000 new = 2000
+	expected = append(expected, []uint64{1000})
 
 	// Expected Scoreboard:
-	// Commit A: 2000 - (2*100 deleted + 1*100 col1 changes) = 1700
+	// Commit A: 1000 - (1*100 deleted + 1*100 col1 changes) = 800
 	// Commit B: 3*100 new + (2 * 100 changed) = 500
-	expected = append(expected, []uint64{1700, 500})
+	expected = append(expected, []uint64{800, 500})
 
 	// Expected Scoreboard:
-	// Commit A: 1700 - (1*100 deleted + 1*50 col1 changes) = 1550
+	// Commit A: 800 - (1*50 col1 changes) = 750
 	// Commit B: 500 - (2*100 deleted + 2*50 col1/col2 changes) = 200
 	// Commit C: 4*100 new + (3 * 100 changed) = 700
-	expected = append(expected, []uint64{1550, 200, 700})
+	expected = append(expected, []uint64{750, 200, 700})
 
 	// Expected Scoreboard:
-	// Commit A: 1550
+	// Commit A: 750
 	// Commit B: 200
 	// Commit C: 700 - (3*50 col1/col2/col3 changes = 550
 	// Commit D: 3*50 col1/col2/col3 changes in 1000-1050 + 1*50 col3 changes in 1050-1100 = 400
-	expected = append(expected, []uint64{1550, 200, 550, 200})
+	expected = append(expected, []uint64{750, 200, 550, 200})
 
 	return expected
 }
@@ -104,6 +104,13 @@ func TestProllyAttribution(t *testing.T) {
 
 			var prevSummary att.Summary = emptySummary(startOfBountyHash)
 			var prevCommit *doltdb.Commit
+			startCommit := commits[0]
+
+			if startCommit.NumParents() != 0 {
+				prevCommit, err = startCommit.GetParent(ctx, 0)
+				require.NoError(t, err)
+			}
+
 			for i := 0; i < len(expected); i++ {
 				commit := commits[i]
 				require.NoError(t, err)
