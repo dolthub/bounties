@@ -50,6 +50,7 @@ const (
 
 var AttSch schema.Schema
 var UpdatedSch schema.Schema
+var InitialSch schema.Schema
 
 func init() {
 	cols := []schema.Column{
@@ -63,12 +64,17 @@ func init() {
 
 	columns := make([]schema.Column, len(cols))
 	copy(columns, cols)
-
 	columns[3] = schema.NewColumn("col4", col4Tag, types.StringKind, false)
-
 	updatedColColl := schema.NewColCollection(columns...)
 
+	initialColColl := schema.NewColCollection(columns[0])
+
 	var err error
+	InitialSch, err = schema.SchemaFromCols(initialColColl)
+	if err != nil {
+		panic(err)
+	}
+
 	AttSch, err = schema.SchemaFromCols(attColColl)
 	if err != nil {
 		panic(err)
@@ -82,20 +88,47 @@ func init() {
 
 var sharedPool = pool.NewBuffPool()
 
-func prollyGenTableState(ctx context.Context, ns tree.NodeStore) ([]tableState, error) {
+func prollyGenTableState(ctx context.Context, ns tree.NodeStore) (tableState, []tableState, error) {
 	var states []tableState
 
-	kd, vd := AttSch.GetMapDescriptors()
+	kd, vd := InitialSch.GetMapDescriptors()
 	m, err := prolly.NewMapFromTuples(ctx, ns, kd, vd)
 	if err != nil {
-		return nil, err
+		return tableState{}, nil, err
 	}
 	kb := val.NewTupleBuilder(kd)
 	vb := val.NewTupleBuilder(vd)
 
-	// ========== STATE A ==========
+	// ========== Initial State ========
 	mut := m.Mutate()
-	// * Inserts 1000 rows with 2 valid columns (pk, col1)
+	for i := uint64(0); i < 1000; i++ {
+		kb.PutUint64(0, i)
+		k := kb.Build(sharedPool)
+		v := vb.Build(sharedPool)
+
+		err = mut.Put(ctx, k, v)
+		if err != nil {
+			return tableState{}, nil, err
+		}
+	}
+	m, err = mut.Map(ctx)
+	if err != nil {
+		return tableState{}, nil, err
+	}
+
+	// Pretend that columns were added to the end of this table.
+	initialState := tableState{
+		rowData: durable.IndexFromProllyMap(m),
+		sch:     AttSch,
+	}
+
+	// ========== STATE A ==========
+	kd, vd = AttSch.GetMapDescriptors()
+	kb = val.NewTupleBuilder(kd)
+	vb = val.NewTupleBuilder(vd)
+	m = prolly.NewMap(m.Node(), m.NodeStore(), kd, vd)
+	mut = m.Mutate()
+	// * Update 1000 rows with a valid column (pk, col1)
 	for i := uint64(0); i < 1000; i++ {
 		kb.PutUint64(0, i)
 		k := kb.Build(sharedPool)
@@ -104,13 +137,13 @@ func prollyGenTableState(ctx context.Context, ns tree.NodeStore) ([]tableState, 
 
 		err = mut.Put(ctx, k, v)
 		if err != nil {
-			return nil, err
+			return tableState{}, nil, err
 		}
 	}
 
 	m, err = mut.Map(ctx)
 	if err != nil {
-		return nil, err
+		return tableState{}, nil, err
 	}
 	states = append(states, tableState{rowData: durable.IndexFromProllyMap(m), sch: AttSch})
 
@@ -123,12 +156,12 @@ func prollyGenTableState(ctx context.Context, ns tree.NodeStore) ([]tableState, 
 		k := kb.Build(sharedPool)
 
 		if err != nil {
-			return nil, err
+			return tableState{}, nil, err
 		}
 
 		err = mut.Delete(ctx, k)
 		if err != nil {
-			return nil, err
+			return tableState{}, nil, err
 		}
 	}
 
@@ -142,7 +175,7 @@ func prollyGenTableState(ctx context.Context, ns tree.NodeStore) ([]tableState, 
 
 		err = mut.Put(ctx, k, v)
 		if err != nil {
-			return nil, err
+			return tableState{}, nil, err
 		}
 	}
 
@@ -156,13 +189,13 @@ func prollyGenTableState(ctx context.Context, ns tree.NodeStore) ([]tableState, 
 
 		err = mut.Put(ctx, k, v)
 		if err != nil {
-			return nil, err
+			return tableState{}, nil, err
 		}
 	}
 
 	m, err = mut.Map(ctx)
 	if err != nil {
-		return nil, err
+		return tableState{}, nil, err
 	}
 	states = append(states, tableState{rowData: durable.IndexFromProllyMap(m), sch: AttSch})
 
@@ -179,7 +212,7 @@ func prollyGenTableState(ctx context.Context, ns tree.NodeStore) ([]tableState, 
 
 		err = mut.Put(ctx, k, v)
 		if err != nil {
-			return nil, err
+			return tableState{}, nil, err
 		}
 	}
 
@@ -189,12 +222,12 @@ func prollyGenTableState(ctx context.Context, ns tree.NodeStore) ([]tableState, 
 		k := kb.Build(sharedPool)
 
 		if err != nil {
-			return nil, err
+			return tableState{}, nil, err
 		}
 
 		err = mut.Delete(ctx, k)
 		if err != nil {
-			return nil, err
+			return tableState{}, nil, err
 		}
 	}
 
@@ -209,13 +242,13 @@ func prollyGenTableState(ctx context.Context, ns tree.NodeStore) ([]tableState, 
 
 		err = mut.Put(ctx, k, v)
 		if err != nil {
-			return nil, err
+			return tableState{}, nil, err
 		}
 	}
 
 	m, err = mut.Map(ctx)
 	if err != nil {
-		return nil, err
+		return tableState{}, nil, err
 	}
 	states = append(states, tableState{rowData: durable.IndexFromProllyMap(m), sch: AttSch})
 
@@ -233,17 +266,17 @@ func prollyGenTableState(ctx context.Context, ns tree.NodeStore) ([]tableState, 
 
 		err = mut.Put(ctx, k, v)
 		if err != nil {
-			return nil, err
+			return tableState{}, nil, err
 		}
 	}
 
 	m, err = mut.Map(ctx)
 	if err != nil {
-		return nil, err
+		return tableState{}, nil, err
 	}
 	states = append(states, tableState{rowData: durable.IndexFromProllyMap(m), sch: AttSch})
 
-	return states, nil
+	return initialState, states, nil
 }
 
 func nomsGenTableState(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore) ([]tableState, error) {
@@ -483,12 +516,18 @@ func GetNumCommits() int {
 }
 
 func GenTestCommitGraph(ctx context.Context, ddb *doltdb.DoltDB, meta []*datas.CommitMeta) (hash.Hash, *doltdb.Commit, error) {
+	var initialState tableState
 	var states []tableState
 	var err error
 	if types.IsFormat_DOLT(ddb.Format()) {
-		states, err = prollyGenTableState(ctx, ddb.NodeStore())
+		initialState, states, err = prollyGenTableState(ctx, ddb.NodeStore())
 	} else {
 		states, err = nomsGenTableState(ctx, ddb.ValueReadWriter(), ddb.NodeStore())
+		idx, err := durable.NewEmptyIndex(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), AttSch)
+		if err != nil {
+			return hash.Hash{}, nil, err
+		}
+		initialState = tableState{rowData: idx, sch: AttSch}
 	}
 
 	if err != nil {
@@ -507,13 +546,7 @@ func GenTestCommitGraph(ctx context.Context, ddb *doltdb.DoltDB, meta []*datas.C
 		return hash.Hash{}, nil, err
 	}
 
-	idx, err := durable.NewEmptyIndex(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), AttSch)
-
-	if err != nil {
-		return hash.Hash{}, nil, err
-	}
-
-	tbl, err := createTable(ctx, ddb, tableState{rowData: idx, sch: AttSch})
+	tbl, err := createTable(ctx, ddb, initialState)
 
 	if err != nil {
 		return hash.Hash{}, nil, err

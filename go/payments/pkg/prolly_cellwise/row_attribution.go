@@ -40,8 +40,12 @@ func prollyRowAttFromValue(d val.TupleDesc, tuple val.Tuple) prollyRowAtt {
 }
 
 // updateFromDiff updates attribution based on a change to the row
-func (ra prollyRowAtt) updateFromDiff(kd val.TupleDesc, commitIdx int16, difference tree.Diff) error {
+func (ra prollyRowAtt) updateFromDiff(kd, vd val.TupleDesc, commitIdx int16, difference tree.Diff) error {
 	numPks := kd.Count()
+
+	if numPks+vd.Count() != len(ra) {
+		return fmt.Errorf("number of cells and cell owners are different")
+	}
 
 	if difference.Type == tree.AddedDiff {
 		// Set all pks as current owner
@@ -51,9 +55,6 @@ func (ra prollyRowAtt) updateFromDiff(kd val.TupleDesc, commitIdx int16, differe
 		}
 
 		v := val.Tuple(difference.To)
-		if numPks+v.Count() != len(ra) {
-			return fmt.Errorf("number of columns changed")
-		}
 
 		// Set non-null fields as current owner
 		for i := 0; i < v.Count(); i++ {
@@ -70,21 +71,13 @@ func (ra prollyRowAtt) updateFromDiff(kd val.TupleDesc, commitIdx int16, differe
 	old := val.Tuple(difference.From)
 	new := val.Tuple(difference.To)
 
-	if old.Count() != new.Count() {
-		return fmt.Errorf("number of columns changed for key: %s", kd.Format(val.Tuple(difference.Key)))
-	}
-
-	if numPks+old.Count() != len(ra) {
-		return fmt.Errorf("number of cell owners and cell count is different")
-	}
-
-	for i := 0; i < old.Count(); i++ {
-		if bytes.Compare(old.GetField(i), new.GetField(i)) == 0 {
+	for i := 0; i < vd.Count(); i++ {
+		if bytes.Compare(vd.GetField(i, old), vd.GetField(i, new)) == 0 {
 			// Skip any cells that haven't changed
 			continue
 		}
 
-		if new.FieldIsNull(i) {
+		if vd.IsNull(i, new) {
 			// Clear current owner
 			ra[numPks+i] = nil
 		} else {
