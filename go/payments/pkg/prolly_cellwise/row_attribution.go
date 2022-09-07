@@ -57,8 +57,8 @@ func (ra prollyRowAtt) updateFromDiff(kd, vd val.TupleDesc, commitIdx int16, dif
 		v := val.Tuple(difference.To)
 
 		// Set non-null fields as current owner
-		for i := 0; i < v.Count(); i++ {
-			if !v.FieldIsNull(i) {
+		for i := 0; i < vd.Count(); i++ {
+			if !vd.IsNull(i, v) {
 				ra[numPks+i] = &ci
 			} else {
 				ra[numPks+i] = nil
