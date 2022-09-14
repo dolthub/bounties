@@ -3,7 +3,7 @@ module github.com/dolthub/bounties/go
 go 1.19
 
 require (
-	github.com/dolthub/dolt/go v0.40.5-0.20220913233258-79c9514e5587
+	github.com/dolthub/dolt/go v0.40.5-0.20220914194932-73a1e5cae38c
 	github.com/pkg/profile v1.5.0
 	github.com/stretchr/testify v1.7.1
 	go.uber.org/zap v1.15.0
@@ -22,7 +22,7 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1 // indirect
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078 // indirect
 	github.com/dolthub/fslock v0.0.3 // indirect
-	github.com/dolthub/go-mysql-server v0.12.1-0.20220913124055-8f4408f0974e // indirect
+	github.com/dolthub/go-mysql-server v0.12.1-0.20220913232556-b173ec28bea4 // indirect
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66 // indirect
 	github.com/dolthub/vitess v0.0.0-20220907211246-051218b2e558 // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
@@ -71,7 +71,7 @@ require (
 	golang.org/x/net v0.0.0-20211015210444-4f30a5c0130f // indirect
 	golang.org/x/oauth2 v0.0.0-20200902213428-5d25da1a8d43 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
-	golang.org/x/sys v0.0.0-20220111092808-5a964db01320 // indirect
+	golang.org/x/sys v0.0.0-20220829200755-d48e67d00261 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/tools v0.1.10 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
