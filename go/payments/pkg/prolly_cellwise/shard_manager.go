@@ -46,7 +46,7 @@ type prollyShardManager struct {
 
 	currStore    *valuefile.FileValueStore
 	nodeStore    tree.NodeStore
-	mut          prolly.MutableMap
+	mut          *prolly.MutableMap
 	commitCounts []uint64
 
 	seen int
