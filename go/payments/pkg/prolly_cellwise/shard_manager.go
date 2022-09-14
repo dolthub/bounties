@@ -149,7 +149,8 @@ func (sm *prollyShardManager) openShard(ctx context.Context) error {
 		return err
 	}
 
-	sm.mut = m.Mutate()
+	mm := m.Mutate()
+	sm.mut = *mm
 	sm.commitCounts = make([]uint64, sm.numCommits)
 
 	return nil
