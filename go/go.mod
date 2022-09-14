@@ -3,7 +3,7 @@ module github.com/dolthub/bounties/go
 go 1.19
 
 require (
-	github.com/dolthub/dolt/go v0.40.5-0.20220913020653-37c7cc379cd5
+	github.com/dolthub/dolt/go v0.40.5-0.20220914013334-eda6e066b14f
 	github.com/pkg/profile v1.5.0
 	github.com/stretchr/testify v1.7.1
 	go.uber.org/zap v1.15.0
@@ -22,7 +22,7 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1 // indirect
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078 // indirect
 	github.com/dolthub/fslock v0.0.3 // indirect
-	github.com/dolthub/go-mysql-server v0.12.1-0.20220912181513-390f047d064f // indirect
+	github.com/dolthub/go-mysql-server v0.12.1-0.20220913124055-8f4408f0974e // indirect
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66 // indirect
 	github.com/dolthub/vitess v0.0.0-20220907211246-051218b2e558 // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
@@ -58,7 +58,6 @@ require (
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/silvasur/buzhash v0.0.0-20160816060738-9bdec3dec7c6 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
-	github.com/src-d/go-oniguruma v1.1.0 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	go.opencensus.io v0.22.4 // indirect
 	go.opentelemetry.io/otel v1.7.0 // indirect
