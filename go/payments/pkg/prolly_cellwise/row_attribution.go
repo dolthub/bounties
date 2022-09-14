@@ -29,8 +29,8 @@ import (
 type prollyRowAtt []*int16
 
 func prollyRowAttFromValue(d val.TupleDesc, tuple val.Tuple) prollyRowAtt {
-	att := make([]*int16, tuple.Count())
-	for i := 0; i < tuple.Count(); i++ {
+	att := make([]*int16, d.Count())
+	for i := 0; i < d.Count(); i++ {
 		if v, ok := d.GetInt16(i, tuple); ok {
 			v2 := v
 			att[i] = &v2
