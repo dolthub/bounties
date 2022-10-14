@@ -419,8 +419,8 @@ func canDiffSchemas(format *types.NomsBinFormat, toSch, fromSch schema.Schema) e
 	// TODO (dhruv): Support equivalent column types like varchar(100) and varchar(150)?
 	n := fromSch.GetNonPKCols().Size()
 	for i := 0; i < n; i++ {
-		fromCol := fromSch.GetNonPKCols().GetAtIndex(i)
-		toCol := toSch.GetNonPKCols().GetAtIndex(i)
+		fromCol := fromSch.GetNonPKCols().GetByIndex(i)
+		toCol := toSch.GetNonPKCols().GetByIndex(i)
 		if fromCol.Tag != toCol.Tag {
 			return fmt.Errorf("column %s (%d) in from schema has different tag than column %s (%d) in to schema", fromCol.Name, fromCol.Tag, toCol.Name, toCol.Tag)
 		}
