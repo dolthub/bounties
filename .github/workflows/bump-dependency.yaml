@@ -43,7 +43,7 @@ jobs:
             try {
               const { LABEL } = process.env;
               const { owner, repo } = context.repo;
-              const res = await github.pulls.list({
+              const res = await github.rest.pulls.list({
                 owner,
                 repo,
                 state: 'open',
@@ -165,7 +165,7 @@ jobs:
 
               if (pull.keepAlive) process.exit(0);
 
-              const checkSuiteRes = await github.checks.listSuitesForRef({
+              const checkSuiteRes = await github.rest.checks.listSuitesForRef({
                 owner,
                 repo,
                 ref: pull.headRef,
@@ -186,14 +186,14 @@ jobs:
                 }
 
                 console.log(`Closing open pr ${pull.number}`);
-                await github.issues.createComment({
+                await github.rest.issues.createComment({
                   issue_number: pull.number,
                   owner,
                   repo,
                   body: `This PR has been superseded by ${SUPERSEDED_BY}`
                 });
 
-                await github.pulls.update({
+                await github.rest.pulls.update({
                   owner,
                   repo,
                   pull_number: pull.number,
