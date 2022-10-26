@@ -129,8 +129,8 @@ github.com/denisbrodbeck/machineid v1.0.1 h1:geKr9qtkB876mXguW2X6TU4ZynleN6ezuMS
 github.com/denisbrodbeck/machineid v1.0.1/go.mod h1:dJUwb7PTidGDeYyUBmXZ2GphQBbjJCrnectwCyxcUSI=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
-github.com/dolthub/dolt/go v0.40.5-0.20221026002114-ee68a95bad35 h1:yMMZ5Kp3HF0fDyhFJTxTHuSiSdY8vJTP2umNh0h6vms=
-github.com/dolthub/dolt/go v0.40.5-0.20221026002114-ee68a95bad35/go.mod h1:KGPa0B1QgE8yGKJ1IBs0nlqQEK1PNSJ53vDUL3KpneA=
+github.com/dolthub/dolt/go v0.40.5-0.20221026162722-805a47120c30 h1:WYmhfwDpOQH1xAoMfrTpej8b4fc8TESI0T+6bBq/r78=
+github.com/dolthub/dolt/go v0.40.5-0.20221026162722-805a47120c30/go.mod h1:KGPa0B1QgE8yGKJ1IBs0nlqQEK1PNSJ53vDUL3KpneA=
 github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078 h1:nrkoh/RcgTq5EsWTcbSBF8KQghCtM+1dhyslghbBoj8=
 github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078/go.mod h1:8Jdiq6CVg8HM4n9fF17sGgXUpFa98zDyscW0A7OQmuM=
 github.com/dolthub/flatbuffers v1.13.0-dh.1 h1:OWJdaPep22N52O/0xsUevxJ6Qfw1M2txCjZPOdjXybE=
