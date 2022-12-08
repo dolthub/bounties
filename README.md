@@ -2,6 +2,8 @@ DoltHub bounties have been designed to encourage data collaboration by incentivi
 In order to be transparent about how prizes are calculated, we are open sourcing the code that we use to attribute 
 contributions made during a bounty to the PRs that they came from.
 
+Check out our [website](https://www.dolthub.com), [team](https://www.dolthub.com/team), and [documentation](https://docs.dolthub.com/introduction/what-is-dolt) to learn more about Dolt.
+
 # Overview of Repository
 
 The codebase is made up of protobuf definition files and go files.  The proto files are under `proto/` and the go code is
