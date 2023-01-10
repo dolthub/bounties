@@ -3,7 +3,7 @@ module github.com/dolthub/bounties/go
 go 1.19
 
 require (
-	github.com/dolthub/dolt/go v0.40.5-0.20230107014115-3ce2e3823e13
+	github.com/dolthub/dolt/go v0.40.5-0.20230110025531-deb32d0e61ee
 	github.com/pkg/profile v1.5.0
 	github.com/stretchr/testify v1.8.0
 	go.uber.org/zap v1.15.0
@@ -21,7 +21,7 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1 // indirect
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078 // indirect
 	github.com/dolthub/fslock v0.0.3 // indirect
-	github.com/dolthub/go-mysql-server v0.14.1-0.20230106225759-dc24b2e2e3e0 // indirect
+	github.com/dolthub/go-mysql-server v0.14.1-0.20230109224253-74f8047bb890 // indirect
 	github.com/dolthub/vitess v0.0.0-20230105173952-b40441dfeb0c // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/fatih/color v1.13.0 // indirect
