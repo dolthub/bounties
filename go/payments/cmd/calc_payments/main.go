@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -176,22 +177,26 @@ func main() {
 }
 
 func calcAttribution(ctx context.Context, method att.AttributionMethod, ddb *doltdb.DoltDB, opts options) error {
+	fmt.Println("running calcAttribution")
 	// mergeCommits will be ordered from least recent to most recent
 	mergeCommits, err := doltutils.GetMergeCommitsBetween(ctx, ddb, opts.startHash, opts.endHash)
 	if err != nil {
 		return err
 	}
 
+	fmt.Printf("Found %d commits between '%s' and '%s'\n", len(mergeCommits), opts.startHash, opts.endHash)
 	if opts.profile != "" && opts.profileHash.IsEmpty() {
 		stopProfFunc := startProfiling(opts.profile)
 		defer stopProfFunc()
 	}
 
+	fmt.Println("reading latest summary")
 	prevCommitIdx, summary, err := readLatestSummary(ctx, method, mergeCommits)
 	if err != nil {
 		return err
 	}
 
+	fmt.Println("previous commit index:", prevCommitIdx)
 	var prevCommit *doltdb.Commit
 	if prevCommitIdx >= 0 {
 		prevCommit = mergeCommits[prevCommitIdx]
@@ -273,15 +278,19 @@ func readLatestSummary(ctx context.Context, method att.AttributionMethod, mergeC
 		}
 
 		summary, err := method.ReadSummary(ctx, h.String()+".summary")
-		if err == att.ErrSummaryDoesntExist {
+		if errors.Is(err, att.ErrSummaryDoesntExist) {
+			fmt.Println("No summary for ", h.String())
 			continue
 		} else if err != nil {
+			fmt.Println(err, "occured during reading summary", h.String())
 			return 0, nil, err
 		}
 
+		fmt.Println("summary found for ", h.String())
 		return i, summary, nil
 	}
 
+	fmt.Println("no summaries found")
 	return -1, nil, nil
 }
 

@@ -16,6 +16,7 @@ package att
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -80,9 +81,9 @@ func (f *FilesysShardStore) ReadShard(ctx context.Context, key string) (*MemShar
 
 	vf, err := valuefile.ReadValueFile(ctx, absPath)
 	if os.IsNotExist(err) {
-		return nil, ErrSummaryDoesntExist
+		return nil, fmt.Errorf("summary file does not exist '%s': %w", absPath, ErrSummaryDoesntExist)
 	} else if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read shard at '%s': %w", absPath, err)
 	}
 
 	return &MemShard{
