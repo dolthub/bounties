@@ -3,7 +3,7 @@ module github.com/dolthub/bounties/go
 go 1.19
 
 require (
-	github.com/dolthub/dolt/go v0.40.5-0.20230214235408-b3cac3ecb2c4
+	github.com/dolthub/dolt/go v0.40.5-0.20230215181648-06b6392e2719
 	github.com/pkg/profile v1.5.0
 	github.com/stretchr/testify v1.8.0
 	go.uber.org/zap v1.15.0
@@ -14,7 +14,7 @@ require (
 	cloud.google.com/go/storage v1.12.0 // indirect
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2 // indirect
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.5+incompatible // indirect
-	github.com/aws/aws-sdk-go v1.33.0 // indirect
+	github.com/aws/aws-sdk-go v1.34.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.3 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
