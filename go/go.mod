@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/dolthub/dolt/go v0.40.5-0.20230301055350-4b2fc34a9499
-	github.com/pkg/profile v1.5.0
+	github.com/pkg/profile v1.7.0
 	github.com/stretchr/testify v1.8.0
 	go.uber.org/zap v1.15.0
 )
@@ -25,6 +25,7 @@ require (
 	github.com/dolthub/vitess v0.0.0-20230223032306-95d4b04eabad // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/fatih/color v1.13.0 // indirect
+	github.com/felixge/fgprof v0.9.3 // indirect
 	github.com/go-kit/kit v0.10.0 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -32,6 +33,7 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/google/flatbuffers v2.0.6+incompatible // indirect
+	github.com/google/pprof v0.0.0-20211214055906-6f57359322fd // indirect
 	github.com/google/uuid v1.2.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.0.5 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
