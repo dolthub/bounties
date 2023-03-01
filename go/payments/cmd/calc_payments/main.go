@@ -47,22 +47,26 @@ type options struct {
 }
 
 func startProfiling(profileType string) func() {
+	var stopper interface {
+		Stop()
+	}
 	switch profileType {
 	case "cpu":
 		fmt.Println("cpu profiling enabled.")
-		return profile.Start(profile.CPUProfile).Stop
+		stopper = profile.Start(profile.CPUProfile)
 	case "mem":
 		fmt.Println("mem profiling enabled.")
-		return profile.Start(profile.MemProfile).Stop
+		stopper = profile.Start(profile.MemProfile)
 	case "blocking":
 		fmt.Println("block profiling enabled")
-		return profile.Start(profile.BlockProfile).Stop
+		stopper = profile.Start(profile.BlockProfile)
 	case "trace":
 		fmt.Println("trace profiling enabled")
-		return profile.Start(profile.TraceProfile).Stop
+		stopper = profile.Start(profile.TraceProfile)
 	default:
 		panic("Unexpected prof flag: " + profileType)
 	}
+	return stopper.Stop
 }
 
 func errExit(message string) {
