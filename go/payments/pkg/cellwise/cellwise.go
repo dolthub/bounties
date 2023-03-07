@@ -588,9 +588,9 @@ func getDiffer(ctx context.Context, shard AttributionShard, tbl, prevTbl *doltdb
 	}
 
 	if prevTbl == nil {
-		return sch, differs.NewMapRowsAsDiffs(ctx, rowData.Format(), types.DiffChangeAdded, rowData, shard.StartInclusive, shard.EndExclusive), nil
+		return sch, differs.NewMapRowsAsDiffs(ctx, tbl.ValueReadWriter(), sch, rowData.Format(), types.DiffChangeAdded, rowData, shard.StartInclusive, shard.EndExclusive), nil
 	} else if tbl == nil {
-		return nil, differs.NewMapRowsAsDiffs(ctx, prevRowData.Format(), types.DiffChangeRemoved, prevRowData, shard.StartInclusive, shard.EndExclusive), nil
+		return nil, differs.NewMapRowsAsDiffs(ctx, prevTbl.ValueReadWriter(), prevSch, prevRowData.Format(), types.DiffChangeRemoved, prevRowData, shard.StartInclusive, shard.EndExclusive), nil
 	}
 
 	eqSchemas := schema.SchemasAreEqual(sch, prevSch)
@@ -602,7 +602,7 @@ func getDiffer(ctx context.Context, shard AttributionShard, tbl, prevTbl *doltdb
 		return sch, differ, nil
 	} else {
 		differ := &differs.DualMapIter{}
-		differ.Start(ctx, prevRowData, rowData, shard.StartInclusive, inRangeFunc)
+		differ.Start(ctx, prevTbl.ValueReadWriter(), tbl.ValueReadWriter(), prevSch, sch, prevRowData, rowData, shard.StartInclusive, inRangeFunc)
 		return sch, differ, nil
 	}
 }
@@ -703,7 +703,7 @@ func (cwa CWAttribution) attributeDiffs(ctx context.Context, commitIdx int16, sh
 		} else {
 			// have an existing attributed row, and a row that has changed
 			diffKey := diffs[0].KeyValue
-			isLess, err := attKey.Less(nbf, diffKey)
+			isLess, err := attKey.Less(ctx, nbf, diffKey)
 
 			if err != nil {
 				return err
