@@ -79,7 +79,7 @@ func (as AttributionShard) inRangeFunc(ctx context.Context, nbf *types.NomsBinFo
 	}
 
 	return func(ctx context.Context, value types.Value) (bool, bool, error) {
-		res, err := value.Less(nbf, as.EndExclusive)
+		res, err := value.Less(ctx, nbf, as.EndExclusive)
 		return res, false, err
 	}
 }

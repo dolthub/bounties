@@ -16,12 +16,14 @@ package differs
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
-	"github.com/dolthub/dolt/go/store/diff"
-	"github.com/dolthub/dolt/go/store/types"
 	"io"
 	"math"
 	"time"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/store/diff"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type kv struct {
@@ -65,7 +67,7 @@ type DualMapIter struct {
 }
 
 // Start initializes the iterator to iterate over 2 maps
-func (itr *DualMapIter) Start(ctx context.Context, from, to types.Map, start types.Value, inRange func(context.Context, types.Value) (bool, bool, error)) {
+func (itr *DualMapIter) Start(ctx context.Context, fromVR, toVR types.ValueReader, fromSch, toSch schema.Schema, from, to types.Map, start types.Value, inRange func(context.Context, types.Value) (bool, bool, error)) {
 	itr.ctx = ctx
 	itr.nbf = from.Format()
 
@@ -81,8 +83,8 @@ func (itr *DualMapIter) Start(ctx context.Context, from, to types.Map, start typ
 		Check:     inRangeWrapper(inRange),
 	}
 
-	fromReader := noms.NewNomsRangeReader(nil, from, []*noms.ReadRange{readRange})
-	toReader := noms.NewNomsRangeReader(nil, to, []*noms.ReadRange{readRange})
+	fromReader := noms.NewNomsRangeReader(fromVR, fromSch, from, []*noms.ReadRange{readRange})
+	toReader := noms.NewNomsRangeReader(toVR, toSch, to, []*noms.ReadRange{readRange})
 
 	itr.mRdrs = [2]*noms.NomsRangeReader{fromReader, toReader}
 }
@@ -102,7 +104,7 @@ func (itr *DualMapIter) GetDiffs(numDiffs int, _ time.Duration) ([]*diff.Differe
 
 	var results []*diff.Difference
 	for i := 0; i < numDiffs; i++ {
-		diff, err := itr.getDiff()
+		diff, err := itr.getDiff(itr.ctx)
 
 		if err != nil {
 			return nil, false, err
@@ -118,7 +120,7 @@ func (itr *DualMapIter) GetDiffs(numDiffs int, _ time.Duration) ([]*diff.Differe
 	return results, len(results) > 0, nil
 }
 
-func (itr *DualMapIter) getDiff() (*diff.Difference, error) {
+func (itr *DualMapIter) getDiff(ctx context.Context) (*diff.Difference, error) {
 	// update the our current key / value pairs when necessary
 	for i := 0; i < 2; i++ {
 		if itr.current[i] == nil {
@@ -158,7 +160,7 @@ func (itr *DualMapIter) getDiff() (*diff.Difference, error) {
 		return kvDiff(fromKV, toKV)
 	} else {
 		// not the same key, so return the lesser kvp
-		isLess, err := itr.current[0].key.Less(itr.nbf, itr.current[1].key)
+		isLess, err := itr.current[0].key.Less(ctx, itr.nbf, itr.current[1].key)
 		if err != nil {
 			return nil, err
 		}
@@ -181,7 +183,7 @@ type inRangeWrapper func(context.Context, types.Value) (bool, bool, error)
 var _ noms.InRangeCheck = inRangeWrapper(nil)
 
 // Check implements the interface noms.InRangeCheck.
-func (i inRangeWrapper) Check(ctx context.Context, tuple types.Tuple) (valid bool, skip bool, err error) {
+func (i inRangeWrapper) Check(ctx context.Context, vr types.ValueReader, tuple types.Tuple) (valid bool, skip bool, err error) {
 	ok, _, err := i(ctx, tuple)
 	return ok, false, err
 }

@@ -18,6 +18,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/types"
@@ -34,10 +35,10 @@ type MapRowsAsDiffs struct {
 }
 
 // NewMapRowsAsDiffs returns a MapRowsAsDiffs object
-func NewMapRowsAsDiffs(ctx context.Context, nbf *types.NomsBinFormat, changeType types.DiffChangeType, m types.Map, startInclusive, endExclusive types.Value) *MapRowsAsDiffs {
+func NewMapRowsAsDiffs(ctx context.Context, vr types.ValueReader, sch schema.Schema, nbf *types.NomsBinFormat, changeType types.DiffChangeType, m types.Map, startInclusive, endExclusive types.Value) *MapRowsAsDiffs {
 	var readRange *noms.ReadRange
 	if !types.IsNull(startInclusive) && !types.IsNull(endExclusive) {
-		readRange = noms.NewRangeStartingAt(startInclusive.(types.Tuple), inRangeCheckLess{endExclusive, nbf})
+		readRange = noms.NewRangeStartingAt(startInclusive.(types.Tuple), inRangeCheckLess{endExclusive})
 	} else if !types.IsNull(startInclusive) {
 		readRange = noms.NewRangeStartingAt(startInclusive.(types.Tuple), noms.InRangeCheckAlways{})
 	} else if !types.IsNull(endExclusive) {
@@ -52,7 +53,7 @@ func NewMapRowsAsDiffs(ctx context.Context, nbf *types.NomsBinFormat, changeType
 		}
 	}
 
-	rd := noms.NewNomsRangeReader(nil, m, []*noms.ReadRange{readRange})
+	rd := noms.NewNomsRangeReader(vr, sch, m, []*noms.ReadRange{readRange})
 	return &MapRowsAsDiffs{
 		ctx:        ctx,
 		changeType: changeType,
@@ -99,13 +100,12 @@ func (m *MapRowsAsDiffs) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.
 // inRangeCheckLess check that a given tuple is in range by comparing it to the enclosed value.
 type inRangeCheckLess struct {
 	val types.Value
-	nbf *types.NomsBinFormat
 }
 
 var _ noms.InRangeCheck = inRangeCheckLess{}
 
 // Check implements the interface noms.InRangeCheck.
-func (i inRangeCheckLess) Check(ctx context.Context, tuple types.Tuple) (valid bool, skip bool, err error) {
-	ok, err := tuple.Less(i.nbf, i.val)
+func (i inRangeCheckLess) Check(ctx context.Context, vr types.ValueReader, tuple types.Tuple) (valid bool, skip bool, err error) {
+	ok, err := tuple.Less(ctx, vr.Format(), i.val)
 	return ok, false, err
 }
