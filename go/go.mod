@@ -3,7 +3,7 @@ module github.com/dolthub/bounties/go
 go 1.19
 
 require (
-	github.com/dolthub/dolt/go v0.40.5-0.20230419201103-cd88b3fde572
+	github.com/dolthub/dolt/go v0.40.5-0.20230420000607-075618d964a9
 	github.com/pkg/profile v1.7.0
 	github.com/stretchr/testify v1.8.1
 	go.uber.org/zap v1.15.0
@@ -20,8 +20,10 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/denisbrodbeck/machineid v1.0.1 // indirect
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078 // indirect
+	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2 // indirect
 	github.com/dolthub/fslock v0.0.3 // indirect
-	github.com/dolthub/go-mysql-server v0.14.1-0.20230417164611-487575e332ac // indirect
+	github.com/dolthub/go-mysql-server v0.15.1-0.20230419220841-24dded8c61ef // indirect
+	github.com/dolthub/jsonpath v0.0.1 // indirect
 	github.com/dolthub/maphash v0.0.0-20221220182448-74e1e1ea1577 // indirect
 	github.com/dolthub/swiss v0.1.0 // indirect
 	github.com/dolthub/vitess v0.0.0-20230407173322-ae1622f38e94 // indirect
@@ -34,7 +36,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
-	github.com/google/flatbuffers v2.0.6+incompatible // indirect
 	github.com/google/pprof v0.0.0-20211214055906-6f57359322fd // indirect
 	github.com/google/uuid v1.2.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.0.5 // indirect
@@ -50,7 +51,6 @@ require (
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/mitchellh/hashstructure v1.1.0 // indirect
-	github.com/oliveagle/jsonpath v0.0.0-20180606110733-2e52cf6e6852 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/shopspring/decimal v1.2.0 // indirect
@@ -82,5 +82,3 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	honnef.co/go/tools v0.1.3 // indirect
 )
-
-replace github.com/google/flatbuffers => github.com/dolthub/flatbuffers v1.13.0-dh.1
