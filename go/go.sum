@@ -105,8 +105,8 @@ github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSs
 github.com/denisbrodbeck/machineid v1.0.1 h1:geKr9qtkB876mXguW2X6TU4ZynleN6ezuMSRhl4D7AQ=
 github.com/denisbrodbeck/machineid v1.0.1/go.mod h1:dJUwb7PTidGDeYyUBmXZ2GphQBbjJCrnectwCyxcUSI=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
-github.com/dolthub/dolt/go v0.40.5-0.20230505002319-0e55c1ea3c6f h1:04o9rKyrrKSCoJkDqQFNVrrKdWmvD5HilvkOqpsJ7FY=
-github.com/dolthub/dolt/go v0.40.5-0.20230505002319-0e55c1ea3c6f/go.mod h1:k6rIQYz+SxObg2Q2WDBFp04tH5f6x9dekclkU4RgVjM=
+github.com/dolthub/dolt/go v0.40.5-0.20230505155015-0ca0f3bdc65a h1:Mql1s7g1I7mQf9KGvP/BAXXiCmS1NOQiUfCXybNPYiM=
+github.com/dolthub/dolt/go v0.40.5-0.20230505155015-0ca0f3bdc65a/go.mod h1:k6rIQYz+SxObg2Q2WDBFp04tH5f6x9dekclkU4RgVjM=
 github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078 h1:nrkoh/RcgTq5EsWTcbSBF8KQghCtM+1dhyslghbBoj8=
 github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078/go.mod h1:8Jdiq6CVg8HM4n9fF17sGgXUpFa98zDyscW0A7OQmuM=
 github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2 h1:u3PMzfF8RkKd3lB9pZ2bfn0qEG+1Gms9599cr0REMww=
