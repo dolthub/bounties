@@ -5,7 +5,7 @@ go 1.21
 toolchain go1.21.1
 
 require (
-	github.com/dolthub/dolt/go v0.40.5-0.20240205114137-2b1b63f208e7
+	github.com/dolthub/dolt/go v0.40.5-0.20240205212717-f3a3d62daf4e
 	github.com/pkg/profile v1.7.0
 	github.com/stretchr/testify v1.8.4
 	go.uber.org/zap v1.24.0
@@ -28,7 +28,7 @@ require (
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2 // indirect
 	github.com/dolthub/fslock v0.0.3 // indirect
 	github.com/dolthub/go-icu-regex v0.0.0-20230524105445-af7e7991c97e // indirect
-	github.com/dolthub/go-mysql-server v0.17.1-0.20240202200035-327428c36572 // indirect
+	github.com/dolthub/go-mysql-server v0.17.1-0.20240205190841-d5876b4e706a // indirect
 	github.com/dolthub/jsonpath v0.0.2-0.20240201003050-392940944c15 // indirect
 	github.com/dolthub/maphash v0.0.0-20221220182448-74e1e1ea1577 // indirect
 	github.com/dolthub/swiss v0.1.0 // indirect
