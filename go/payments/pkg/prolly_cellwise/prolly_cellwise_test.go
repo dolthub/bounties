@@ -107,8 +107,11 @@ func TestProllyAttribution(t *testing.T) {
 			startCommit := commits[0]
 
 			if startCommit.NumParents() != 0 {
-				prevCommit, err = startCommit.GetParent(ctx, 0)
+				optCmt, err := startCommit.GetParent(ctx, 0)
 				require.NoError(t, err)
+				ok := false
+				prevCommit, ok = optCmt.ToCommit()
+				require.True(t, ok)
 			}
 
 			for i := 0; i < len(expected); i++ {
