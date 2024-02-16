@@ -209,9 +209,14 @@ func calcAttribution(ctx context.Context, method att.AttributionMethod, ddb *dol
 		if err != nil {
 			return err
 		}
-		prevCommit, err = ddb.Resolve(ctx, cs, nil)
+		optCmt, err := ddb.Resolve(ctx, cs, nil)
 		if err != nil {
 			return err
+		}
+		ok := false
+		prevCommit, ok = optCmt.ToCommit()
+		if !ok {
+			return doltdb.ErrGhostCommitRuntimeFailure
 		}
 
 		summary = method.EmptySummary(ctx)

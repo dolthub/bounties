@@ -94,10 +94,14 @@ func GetMergeCommitsAfter(ctx context.Context, db *doltdb.DoltDB, current *doltd
 			return nil, err
 		}
 
-		current, err = db.Resolve(ctx, cs, nil)
-
+		optCmt, err := db.Resolve(ctx, cs, nil)
 		if err != nil {
 			return nil, err
+		}
+		ok := false
+		current, ok = optCmt.ToCommit()
+		if !ok {
+			return nil, doltdb.ErrGhostCommitRuntimeFailure
 		}
 	}
 
@@ -117,10 +121,14 @@ func GetMergeCommitsBetween(ctx context.Context, db *doltdb.DoltDB, start, end h
 		return nil, err
 	}
 
-	cm, err := db.Resolve(ctx, cs, nil)
+	optCmt, err := db.Resolve(ctx, cs, nil)
 
 	if err != nil {
 		return nil, err
+	}
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, doltdb.ErrGhostCommitRuntimeFailure
 	}
 
 	return GetMergeCommitsAfter(ctx, db, cm, start)
