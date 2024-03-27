@@ -98,7 +98,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go/go.mod
-          check-latest: true
       - name: Bump dependency
         working-directory: go
         run: |
