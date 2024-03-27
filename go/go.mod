@@ -1,8 +1,8 @@
 module github.com/dolthub/bounties/go
 
-go 1.21
+go 1.22
 
-toolchain go1.21.1
+toolchain go1.22.1
 
 require (
 	github.com/dolthub/dolt/go v0.40.5-0.20240311172458-fc9dd6b536e9
