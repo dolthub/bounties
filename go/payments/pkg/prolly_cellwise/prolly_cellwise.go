@@ -289,7 +289,7 @@ func (m Method) shardsHaveDiffs(ctx context.Context, shards []AttributionShard, 
 	var tblHash hash.Hash
 	var prevTblHash hash.Hash
 
-	tbl, ok, err := root.GetTable(ctx, table)
+	tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: table})
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +303,7 @@ func (m Method) shardsHaveDiffs(ctx context.Context, shards []AttributionShard, 
 
 	var prevTbl *doltdb.Table
 	if prevRoot != nil {
-		prevTbl, ok, err = prevRoot.GetTable(ctx, table)
+		prevTbl, ok, err = prevRoot.GetTable(ctx, doltdb.TableName{Name: table})
 		if err != nil {
 			return nil, err
 		}
@@ -467,7 +467,7 @@ func (m Method) ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *d
 
 	shard := shardInfo.(AttributionShard)
 	tableName := shard.Table
-	tbl, _, err := root.GetTable(ctx, tableName)
+	tbl, _, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
 	if err != nil {
 		return nil, err
 	}
@@ -479,7 +479,7 @@ func (m Method) ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *d
 
 	var prevTbl *doltdb.Table
 	if prevRoot != nil {
-		prevTbl, _, err = prevRoot.GetTable(ctx, tableName)
+		prevTbl, _, err = prevRoot.GetTable(ctx, doltdb.TableName{Name: tableName})
 
 		if err != nil {
 			return nil, err
