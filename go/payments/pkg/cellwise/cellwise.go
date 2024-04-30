@@ -320,7 +320,7 @@ func (cwa CWAttribution) shardsHaveDiffs(ctx context.Context, shards []Attributi
 	var tblHash hash.Hash
 	var prevTblHash hash.Hash
 
-	tbl, ok, err := root.GetTable(ctx, table)
+	tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: table})
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +332,7 @@ func (cwa CWAttribution) shardsHaveDiffs(ctx context.Context, shards []Attributi
 		}
 	}
 
-	prevTbl, ok, err := prevRoot.GetTable(ctx, table)
+	prevTbl, ok, err := prevRoot.GetTable(ctx, doltdb.TableName{Name: table})
 	if err != nil {
 		return nil, err
 	}
@@ -405,14 +405,14 @@ func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, 
 
 	shard := shardInfo.(AttributionShard)
 	tableName := shard.Table
-	tbl, _, err := root.GetTable(ctx, tableName)
+	tbl, _, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
 	if err != nil {
 		return nil, err
 	}
 
 	var prevTbl *doltdb.Table
 	if prevRoot != nil {
-		prevTbl, _, err = prevRoot.GetTable(ctx, tableName)
+		prevTbl, _, err = prevRoot.GetTable(ctx, doltdb.TableName{Name: tableName})
 
 		if err != nil {
 			return nil, err
@@ -774,7 +774,7 @@ func (cwa CWAttribution) updateAttFromDiff(ctx context.Context, shardMgr *shardM
 }
 
 func getRowData(ctx context.Context, table string, root *doltdb.RootValue) (types.Map, error) {
-	tbl, ok, err := root.GetTable(ctx, table)
+	tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: table})
 
 	if err != nil {
 		return types.Map{}, err
