@@ -5,7 +5,7 @@ go 1.22
 toolchain go1.22.1
 
 require (
-	github.com/dolthub/dolt/go v0.40.5-0.20240508125147-09cc98d00e86
+	github.com/dolthub/dolt/go v0.40.5-0.20240508222928-1488284dada8
 	github.com/pkg/profile v1.7.0
 	github.com/stretchr/testify v1.8.4
 	go.uber.org/zap v1.24.0
