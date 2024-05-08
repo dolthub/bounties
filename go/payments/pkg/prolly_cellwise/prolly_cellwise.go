@@ -95,7 +95,7 @@ func (m Method) CollectShards(ctx context.Context, commit, prevCommit *doltdb.Co
 		return nil, err
 	}
 
-	var prevRoot *doltdb.RootValue
+	var prevRoot doltdb.RootValue
 	if prevCommit != nil {
 		prevRoot, err = prevCommit.GetRootValue(ctx)
 		if err != nil {
@@ -113,7 +113,7 @@ func (m Method) CollectShards(ctx context.Context, commit, prevCommit *doltdb.Co
 	return m.collectShards(ctx, pas, root, prevRoot)
 }
 
-func (m Method) collectShards(ctx context.Context, summary ProllyAttSummary, root, prevRoot *doltdb.RootValue) ([]att.ShardInfo, error) {
+func (m Method) collectShards(ctx context.Context, summary ProllyAttSummary, root, prevRoot doltdb.RootValue) ([]att.ShardInfo, error) {
 	if jsonData, err := json.Marshal(summary); err == nil {
 		m.logger.Info("collecting shards", zap.String("summary", string(jsonData)))
 	}
@@ -157,7 +157,7 @@ func (m Method) collectShards(ctx context.Context, summary ProllyAttSummary, roo
 	return allShards, nil
 }
 
-func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, table string, root *doltdb.RootValue, prevRoot *doltdb.RootValue) ([]att.ShardInfo, error) {
+func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, table string, root doltdb.RootValue, prevRoot doltdb.RootValue) ([]att.ShardInfo, error) {
 	rowData, err := getRowData(ctx, table, root)
 	if err != nil {
 		return nil, err
@@ -268,8 +268,8 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 	return subDivisions, nil
 }
 
-func getRowData(ctx context.Context, table string, root *doltdb.RootValue) (prolly.Map, error) {
-	tbl, _, ok, err := root.GetTableInsensitive(ctx, table)
+func getRowData(ctx context.Context, table string, root doltdb.RootValue) (prolly.Map, error) {
+	tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, root, table)
 	if err != nil {
 		return prolly.Map{}, err
 	}
@@ -285,7 +285,7 @@ func getRowData(ctx context.Context, table string, root *doltdb.RootValue) (prol
 
 // looks at whether the table has changed.  If it has changed, it then looks to see if their are diffs that touch the
 // corresponding shards
-func (m Method) shardsHaveDiffs(ctx context.Context, shards []AttributionShard, table string, root, prevRoot *doltdb.RootValue) ([]bool, error) {
+func (m Method) shardsHaveDiffs(ctx context.Context, shards []AttributionShard, table string, root, prevRoot doltdb.RootValue) ([]bool, error) {
 	var tblHash hash.Hash
 	var prevTblHash hash.Hash
 
@@ -452,7 +452,7 @@ func (m Method) ProcessShard(ctx context.Context, commitIdx int16, cm, prevCm *d
 		return nil, err
 	}
 
-	var prevRoot *doltdb.RootValue
+	var prevRoot doltdb.RootValue
 	if prevCm != nil {
 		prevRoot, err = prevCm.GetRootValue(ctx)
 		if err != nil {
