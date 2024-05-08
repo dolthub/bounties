@@ -26,7 +26,7 @@ import (
 )
 
 // GetRows gets a tables row data and schema from a rootValue and table name
-func GetRows(ctx context.Context, root *doltdb.RootValue, tableName string) (types.Map, schema.Schema, error) {
+func GetRows(ctx context.Context, root doltdb.RootValue, tableName string) (types.Map, schema.Schema, error) {
 	tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
 
 	if err != nil {
@@ -135,7 +135,7 @@ func GetMergeCommitsBetween(ctx context.Context, db *doltdb.DoltDB, start, end h
 }
 
 // gets the lists of tables that are scored.  This filters out any tables with the prefix dolt_
-func GetScoredTables(ctx context.Context, additonalNames []string, root *doltdb.RootValue) ([]string, error) {
+func GetScoredTables(ctx context.Context, additonalNames []string, root doltdb.RootValue) ([]string, error) {
 	tableNames, err := root.GetTableNames(ctx, doltdb.DefaultSchemaName)
 
 	if err != nil {

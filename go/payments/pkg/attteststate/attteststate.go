@@ -481,7 +481,7 @@ func createTable(ctx context.Context, ddb *doltdb.DoltDB, state tableState) (*do
 	return tbl, nil
 }
 
-func createCommit(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, tbl *doltdb.Table, parents []*doltdb.Commit, meta *datas.CommitMeta) (*doltdb.RootValue, *doltdb.Commit, error) {
+func createCommit(ctx context.Context, ddb *doltdb.DoltDB, root doltdb.RootValue, tbl *doltdb.Table, parents []*doltdb.Commit, meta *datas.CommitMeta) (doltdb.RootValue, *doltdb.Commit, error) {
 	var err error
 	if tbl != nil {
 		root, err = root.PutTable(ctx, doltdb.TableName{Name: TestTableName}, tbl)

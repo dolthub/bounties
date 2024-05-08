@@ -251,7 +251,7 @@ func (cwa CWAttribution) CollectShards(ctx context.Context, commit, prevCommit *
 		return nil, err
 	}
 
-	var prevRoot *doltdb.RootValue
+	var prevRoot doltdb.RootValue
 	if prevCommit != nil {
 		prevRoot, err = prevCommit.GetRootValue(ctx)
 		if err != nil {
@@ -269,7 +269,7 @@ func (cwa CWAttribution) CollectShards(ctx context.Context, commit, prevCommit *
 	return cwa.collectShards(ctx, cws, root, prevRoot)
 }
 
-func (cwa CWAttribution) collectShards(ctx context.Context, summary CellwiseAttSummary, root, prevRoot *doltdb.RootValue) ([]att.ShardInfo, error) {
+func (cwa CWAttribution) collectShards(ctx context.Context, summary CellwiseAttSummary, root, prevRoot doltdb.RootValue) ([]att.ShardInfo, error) {
 	if jsonData, err := json.Marshal(summary); err == nil {
 		cwa.logger.Info("collecting shards", zap.String("summary", string(jsonData)))
 	}
@@ -316,7 +316,7 @@ func (cwa CWAttribution) collectShards(ctx context.Context, summary CellwiseAttS
 
 // looks at whether the table has changed.  If it has changed, it then looks to see if their are diffs that touch the
 // corresponding shards
-func (cwa CWAttribution) shardsHaveDiffs(ctx context.Context, shards []AttributionShard, table string, root, prevRoot *doltdb.RootValue) ([]bool, error) {
+func (cwa CWAttribution) shardsHaveDiffs(ctx context.Context, shards []AttributionShard, table string, root, prevRoot doltdb.RootValue) ([]bool, error) {
 	var tblHash hash.Hash
 	var prevTblHash hash.Hash
 
@@ -390,7 +390,7 @@ func (cwa CWAttribution) ProcessShard(ctx context.Context, commitIdx int16, cm, 
 		return nil, err
 	}
 
-	var prevRoot *doltdb.RootValue
+	var prevRoot doltdb.RootValue
 	if prevCm != nil {
 		prevRoot, err = prevCm.GetRootValue(ctx)
 		if err != nil {
@@ -773,7 +773,7 @@ func (cwa CWAttribution) updateAttFromDiff(ctx context.Context, shardMgr *shardM
 	return shardMgr.addRowAtt(ctx, key, ra, nil)
 }
 
-func getRowData(ctx context.Context, table string, root *doltdb.RootValue) (types.Map, error) {
+func getRowData(ctx context.Context, table string, root doltdb.RootValue) (types.Map, error) {
 	tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: table})
 
 	if err != nil {
@@ -785,7 +785,7 @@ func getRowData(ctx context.Context, table string, root *doltdb.RootValue) (type
 	return tbl.GetNomsRowData(ctx)
 }
 
-func (cwa CWAttribution) subdivideShard(ctx context.Context, shard AttributionShard, table string, root *doltdb.RootValue, prevRoot *doltdb.RootValue) ([]att.ShardInfo, error) {
+func (cwa CWAttribution) subdivideShard(ctx context.Context, shard AttributionShard, table string, root doltdb.RootValue, prevRoot doltdb.RootValue) ([]att.ShardInfo, error) {
 	if cwa.shardParams.SubdivideDiffsSize <= 0 {
 		return []att.ShardInfo{shard}, nil
 	}
