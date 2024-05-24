@@ -1,11 +1,11 @@
 module github.com/dolthub/bounties/go
 
-go 1.22
+go 1.22.2
 
-toolchain go1.22.1
+toolchain go1.22.3
 
 require (
-	github.com/dolthub/dolt/go v0.40.5-0.20240510222302-4b7710fe33d6
+	github.com/dolthub/dolt/go v0.40.5-0.20240524002353-018e1c52b729
 	github.com/pkg/profile v1.7.0
 	github.com/stretchr/testify v1.8.4
 	go.uber.org/zap v1.24.0
@@ -28,12 +28,12 @@ require (
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2 // indirect
 	github.com/dolthub/fslock v0.0.3 // indirect
 	github.com/dolthub/go-icu-regex v0.0.0-20230524105445-af7e7991c97e // indirect
-	github.com/dolthub/go-mysql-server v0.18.2-0.20240510163552-6d031063f96f // indirect
+	github.com/dolthub/go-mysql-server v0.18.2-0.20240523233847-17b9cc64cf93 // indirect
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63 // indirect
 	github.com/dolthub/jsonpath v0.0.2-0.20240227200619-19675ab05c71 // indirect
 	github.com/dolthub/maphash v0.0.0-20221220182448-74e1e1ea1577 // indirect
 	github.com/dolthub/swiss v0.1.0 // indirect
-	github.com/dolthub/vitess v0.0.0-20240429213844-e8e1b4cd75c4 // indirect
+	github.com/dolthub/vitess v0.0.0-20240521104846-e778edc6deb3 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/felixge/fgprof v0.9.3 // indirect
