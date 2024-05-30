@@ -1,13 +1,11 @@
 module github.com/dolthub/bounties/go
 
-replace github.com/dolthub/dolt/go => ../../dolt/go
-
 go 1.22.2
 
 toolchain go1.22.3
 
 require (
-	github.com/dolthub/dolt/go v0.40.5-0.20240524223507-5e72f9173e6a
+	github.com/dolthub/dolt/go v0.40.5-0.20240530151756-0ca0493dcb6f
 	github.com/pkg/profile v1.7.0
 	github.com/stretchr/testify v1.8.4
 	go.uber.org/zap v1.24.0
