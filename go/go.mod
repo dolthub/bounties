@@ -1,5 +1,7 @@
 module github.com/dolthub/bounties/go
 
+replace github.com/dolthub/dolt/go => ../../dolt/go
+
 go 1.22.2
 
 toolchain go1.22.3
@@ -28,7 +30,7 @@ require (
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2 // indirect
 	github.com/dolthub/fslock v0.0.3 // indirect
 	github.com/dolthub/go-icu-regex v0.0.0-20230524105445-af7e7991c97e // indirect
-	github.com/dolthub/go-mysql-server v0.18.2-0.20240524210202-d4cb7e6ae414 // indirect
+	github.com/dolthub/go-mysql-server v0.18.2-0.20240529234304-47f89331b0ea // indirect
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63 // indirect
 	github.com/dolthub/jsonpath v0.0.2-0.20240227200619-19675ab05c71 // indirect
 	github.com/dolthub/maphash v0.0.0-20221220182448-74e1e1ea1577 // indirect
