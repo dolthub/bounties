@@ -269,7 +269,7 @@ func (m Method) subdivideShard(ctx context.Context, shard AttributionShard, tabl
 }
 
 func getRowData(ctx context.Context, table string, root doltdb.RootValue) (prolly.Map, error) {
-	tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, root, table)
+	tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: table})
 	if err != nil {
 		return prolly.Map{}, err
 	}
